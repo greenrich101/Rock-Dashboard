@@ -328,14 +328,16 @@
       background: #1a1a2e;
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 4px;
       padding: 8px 24px;
       box-shadow: 0 -2px 8px rgba(0,0,0,0.15);
       z-index: 100;
+      overflow-x: auto;
     }
 
     .nav-btn {
-      padding: 10px 20px;
+      padding: 10px 16px;
       font-size: 13px;
       font-weight: 500;
       border: none;
@@ -345,6 +347,7 @@
       border-radius: 8px;
       transition: all 0.15s;
       white-space: nowrap;
+      flex-shrink: 0;
     }
 
     .nav-btn:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.9); }
@@ -376,6 +379,72 @@
     .section-finance thead th { background: #ecfdf5; }
     .section-performance .table-header { color: #1e40af; border-left: 4px solid #3b82f6; padding-left: 20px; }
     .section-performance thead th { background: #eff6ff; }
+
+    /* Rocks section */
+    .section-rocks .table-header { color: #9333ea; border-left: 4px solid #a855f7; padding-left: 20px; }
+    .section-rocks thead th { background: #faf5ff; }
+
+    .rocks-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .rock-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      border-left: 4px solid #e5e7eb;
+    }
+
+    .rock-card.rock-on-track { border-left-color: #059669; }
+    .rock-card.rock-at-risk { border-left-color: #d97706; }
+    .rock-card.rock-off-track { border-left-color: #dc2626; }
+
+    .rock-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .rock-description {
+      font-size: 13px;
+      color: #4b5563;
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+
+    .milestone-bar {
+      display: flex;
+      gap: 3px;
+      margin-bottom: 6px;
+    }
+
+    .milestone-segment {
+      flex: 1;
+      height: 8px;
+      border-radius: 4px;
+      background: #e5e7eb;
+    }
+
+    .milestone-segment.ms-completed { background: #059669; }
+    .milestone-segment.ms-behind { background: #fbbf24; }
+
+    .milestone-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: #9ca3af;
+    }
+
+    .rock-pva {
+      margin-top: 8px;
+      font-size: 13px;
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
@@ -409,6 +478,7 @@
   <nav class="bottom-nav">
     <button class="nav-btn active" data-tab="company" onclick="switchTab('company')">Company Scorecard</button>
     <button class="nav-btn" data-tab="department" onclick="switchTab('department')">Department Scorecard</button>
+    <button class="nav-btn" data-tab="rocks" onclick="switchTab('rocks')">Rocks</button>
   </nav>
 
 <script>
@@ -898,6 +968,14 @@ let deptWeekLabels = [];
 let deptBarChart = null;
 let deptLineChart = null;
 let currentTab = 'company';
+
+// --- Rocks ---
+const ROCKS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=1771278634`;
+let rocksData = [];
+let rockWeekLabels = [];
+let rockMilestoneDescriptions = {};
+let rockBarChart = null;
+let rockLineChart = null;
 
 // Section headers in the sheet
 const SECTION_HEADERS = ['inventory', 'customer service', 'technology', 'finance'];
@@ -1435,6 +1513,473 @@ async function loadDeptData() {
   }
 }
 
+// --- Rocks Tab ---
+function extractRocksData(rows) {
+  if (rows.length < 3) return;
+
+  const weekRow = rows[1];
+  rockWeekLabels = [];
+  const dataCols = [];
+  for (let j = 2; j <= 15 && j < weekRow.length; j++) {
+    const val = (weekRow[j] || '').trim();
+    if (val.match(/^WK\s*\d+/i)) {
+      rockWeekLabels.push(val);
+      dataCols.push(j);
+    }
+  }
+
+  const totalCol = dataCols.length > 0 ? dataCols[dataCols.length - 1] + 1 : 16;
+
+  rocksData = [];
+  rockMilestoneDescriptions = {};
+  const dataRows = rows.slice(2);
+
+  for (let i = 0; i < dataRows.length; i++) {
+    const row = dataRows[i];
+    if (!row || row.length < 3) continue;
+
+    const col0 = (row[0] || '').trim();
+    const col1 = (row[1] || '').trim();
+    const col1Lower = col1.toLowerCase();
+
+    // Detect triplet: Forecast row
+    if (col1Lower === 'forecast') {
+      const forecastWeekly = dataCols.map(c => cleanNum(row[c]));
+      const forecastSummary = cleanNum(row[totalCol]);
+
+      const actualsRow = dataRows[i + 1];
+      if (!actualsRow) { i += 2; continue; }
+
+      const owner = (actualsRow[0] || '').trim();
+      const description = (actualsRow[1] || '').trim();
+      const actualWeekly = dataCols.map(c => cleanNum(actualsRow[c]));
+      const actualSummary = cleanNum(actualsRow[totalCol]);
+
+      const pvaRow = dataRows[i + 2];
+      let pvaWeekly = dataCols.map(() => null);
+      let pvaSummary = null;
+      if (pvaRow && (pvaRow[1] || '').toLowerCase().includes('plan vs actual')) {
+        pvaWeekly = dataCols.map(c => cleanNum(pvaRow[c]));
+        pvaSummary = cleanNum(pvaRow[totalCol]);
+      }
+
+      // Find latest week with actual data
+      let latestWeekIdx = -1;
+      for (let k = actualWeekly.length - 1; k >= 0; k--) {
+        if (actualWeekly[k] !== null) { latestWeekIdx = k; break; }
+      }
+
+      const currentMilestone = latestWeekIdx >= 0 ? (actualWeekly[latestWeekIdx] || 0) : 0;
+      const expectedMilestone = latestWeekIdx >= 0 ? (forecastWeekly[latestWeekIdx] || 0) : 0;
+
+      let rockStatus;
+      if (pvaSummary !== null) {
+        if (pvaSummary >= 100) rockStatus = 'on-track';
+        else if (pvaSummary >= 50) rockStatus = 'at-risk';
+        else rockStatus = 'off-track';
+      } else {
+        if (currentMilestone >= expectedMilestone) rockStatus = 'on-track';
+        else if (currentMilestone >= expectedMilestone - 1) rockStatus = 'at-risk';
+        else rockStatus = 'off-track';
+      }
+
+      if (owner && description) {
+        rocksData.push({
+          owner, description,
+          forecastWeekly, forecastSummary,
+          actualWeekly, actualSummary,
+          pvaWeekly, pvaSummary,
+          latestWeekIdx, currentMilestone, expectedMilestone, rockStatus,
+        });
+      }
+
+      i += 2;
+      continue;
+    }
+
+    // Detect milestone description rows
+    if (col1.match(/^\s*Milestone\s*\d/i)) {
+      const match = col1.match(/Milestone\s*(\d)/i);
+      if (match && rocksData.length > 0) {
+        const lastRock = rocksData[rocksData.length - 1];
+        if (!rockMilestoneDescriptions[lastRock.owner]) {
+          rockMilestoneDescriptions[lastRock.owner] = {};
+        }
+        rockMilestoneDescriptions[lastRock.owner][parseInt(match[1])] = col1.trim();
+      }
+    }
+  }
+}
+
+function renderRocks() {
+  if (rocksData.length === 0) {
+    document.getElementById('app').innerHTML = `
+      <div class="error-screen">
+        <h2>No rocks data found</h2>
+        <p>Could not parse data from the Rocks sheet.</p>
+      </div>`;
+    return;
+  }
+
+  let html = '';
+
+  // Legend
+  html += `<div class="legend">
+    <span class="legend-item"><span class="legend-dot" style="background:#059669"></span> On Track (100%)</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#d97706"></span> At Risk (50–99%)</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#dc2626"></span> Off Track (&lt;50%)</span>
+  </div>`;
+
+  // KPI Cards
+  const onTrackCount = rocksData.filter(r => r.rockStatus === 'on-track').length;
+  const offTrackCount = rocksData.filter(r => r.rockStatus === 'off-track').length;
+  const atRiskCount = rocksData.filter(r => r.rockStatus === 'at-risk').length;
+  const totalRocks = rocksData.length;
+  const onTrackPct = totalRocks > 0 ? Math.round((onTrackCount / totalRocks) * 100) : 0;
+  const avgCompletion = rocksData.length > 0
+    ? Math.round(rocksData.reduce((sum, r) => sum + (r.pvaSummary || 0), 0) / rocksData.length)
+    : 0;
+
+  const maxWeekIdx = Math.max(...rocksData.map(r => r.latestWeekIdx).filter(v => v >= 0), 0);
+  const currentWeek = maxWeekIdx + 1;
+  const totalWeeks = rockWeekLabels.length;
+
+  const onTrackStatus = onTrackPct >= 80 ? 'green' : onTrackPct >= 60 ? 'yellow' : 'red';
+  const avgStatus = avgCompletion >= 95 ? 'green' : avgCompletion >= 75 ? 'yellow' : 'red';
+  const atRiskStatus = offTrackCount === 0 ? 'green' : offTrackCount <= 1 ? 'yellow' : 'red';
+
+  html += '<div class="kpi-grid">';
+  html += `
+    <div class="kpi-card">
+      <div class="kpi-label">ROCKS ON TRACK</div>
+      <div class="kpi-value">${onTrackCount}/${totalRocks}</div>
+      <div class="kpi-forecast">${offTrackCount} off track, ${atRiskCount} at risk</div>
+      <span class="kpi-badge status-${onTrackStatus}">
+        <span class="kpi-dot"></span>
+        ${onTrackPct}% on track
+      </span>
+    </div>`;
+  html += `
+    <div class="kpi-card">
+      <div class="kpi-label">AVERAGE COMPLETION</div>
+      <div class="kpi-value">${avgCompletion}%</div>
+      <div class="kpi-forecast">across all rocks</div>
+      <span class="kpi-badge status-${avgStatus}">
+        <span class="kpi-dot"></span>
+        ${avgStatus === 'green' ? 'Healthy' : avgStatus === 'yellow' ? 'Monitor' : 'Behind'}
+      </span>
+    </div>`;
+  html += `
+    <div class="kpi-card">
+      <div class="kpi-label">ROCKS OFF TRACK</div>
+      <div class="kpi-value">${offTrackCount}</div>
+      <div class="kpi-forecast">${atRiskCount} at risk</div>
+      <span class="kpi-badge status-${atRiskStatus}">
+        <span class="kpi-dot"></span>
+        ${offTrackCount === 0 ? 'All clear' : offTrackCount + ' need attention'}
+      </span>
+    </div>`;
+  html += `
+    <div class="kpi-card">
+      <div class="kpi-label">QUARTER PROGRESS</div>
+      <div class="kpi-value">WK ${currentWeek}</div>
+      <div class="kpi-forecast">of ${totalWeeks} weeks</div>
+      <span class="kpi-badge" style="background:#e0e7ff;color:#3730a3;">
+        <span class="kpi-dot" style="background:#3730a3;"></span>
+        ${Math.round((currentWeek / totalWeeks) * 100)}% elapsed
+      </span>
+    </div>`;
+  html += '</div>';
+
+  // Rock Status Cards
+  html += '<div class="rocks-grid">';
+  rocksData.forEach(r => {
+    const statusClass = 'rock-' + r.rockStatus;
+    const statusLabel = r.rockStatus === 'on-track' ? 'On Track'
+      : r.rockStatus === 'at-risk' ? 'At Risk' : 'Off Track';
+    const badgeClass = r.rockStatus === 'on-track' ? 'status-green'
+      : r.rockStatus === 'at-risk' ? 'status-yellow' : 'status-red';
+
+    let milestoneBarHtml = '<div class="milestone-bar">';
+    for (let m = 1; m <= 5; m++) {
+      let segClass = '';
+      if (m <= r.currentMilestone) segClass = 'ms-completed';
+      else if (m <= r.expectedMilestone && m > r.currentMilestone) segClass = 'ms-behind';
+      milestoneBarHtml += `<div class="milestone-segment ${segClass}"></div>`;
+    }
+    milestoneBarHtml += '</div>';
+
+    const statusColor = r.rockStatus === 'on-track' ? '#059669' : r.rockStatus === 'at-risk' ? '#d97706' : '#dc2626';
+
+    html += `
+      <div class="rock-card ${statusClass}">
+        <div class="rock-header">
+          <span><span class="dept-badge">${r.owner}</span></span>
+          <span class="kpi-badge ${badgeClass}" style="font-size:12px;">
+            <span class="kpi-dot"></span>
+            ${statusLabel}
+          </span>
+        </div>
+        <div class="rock-description">${r.description}</div>
+        ${milestoneBarHtml}
+        <div class="milestone-labels">
+          <span>M1</span><span>M2</span><span>M3</span><span>M4</span><span>M5</span>
+        </div>
+        <div class="rock-pva" style="color:${statusColor}">
+          Milestone ${r.currentMilestone}/5 ${r.pvaSummary !== null ? '(' + Math.round(r.pvaSummary) + '%)' : ''}
+        </div>
+      </div>`;
+  });
+  html += '</div>';
+
+  // Charts
+  html += `<div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">Rock Milestone Progress — Expected vs Actual</div>
+      <div class="chart-container"><canvas id="rockBarChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Weekly Milestone Trajectory</div>
+      <div class="chart-container"><canvas id="rockLineChart"></canvas></div>
+    </div>
+  </div>`;
+
+  // Weekly Breakdown Table
+  html += `<div class="table-card section-rocks">
+    <div class="table-header">Weekly Milestone Breakdown</div>
+    <div class="table-wrapper"><table>
+      <thead><tr>
+        <th>Owner</th><th>Rock</th><th>Type</th>`;
+  rockWeekLabels.forEach(w => { html += `<th>${w}</th>`; });
+  html += `<th>Status</th></tr></thead><tbody>`;
+
+  rocksData.forEach(r => {
+    // Forecast row
+    html += `<tr>
+      <td class="metric-group-label" rowspan="3">${r.owner}</td>
+      <td class="metric-group-label" rowspan="3" style="max-width:200px;white-space:normal;font-size:12px;">${r.description}</td>
+      <td class="row-type">Forecast</td>`;
+    r.forecastWeekly.forEach(v => {
+      html += `<td>${v !== null ? v : ''}</td>`;
+    });
+    html += `<td><strong>${r.forecastSummary !== null ? r.forecastSummary : ''}</strong></td></tr>`;
+
+    // Actuals row
+    html += `<tr><td class="row-type">Actual</td>`;
+    r.actualWeekly.forEach((v, idx) => {
+      let cls = '';
+      if (v !== null && r.forecastWeekly[idx] !== null) {
+        cls = v >= r.forecastWeekly[idx] ? 'cell-green' : 'cell-red';
+      }
+      html += `<td class="${cls}">${v !== null ? v : ''}</td>`;
+    });
+    html += `<td><strong>${r.actualSummary !== null ? r.actualSummary : ''}</strong></td></tr>`;
+
+    // PvA row
+    html += `<tr><td class="row-type">% of Plan</td>`;
+    r.pvaWeekly.forEach(v => {
+      const cls = v !== null && v !== 0 ? 'cell-' + getStatusClass(v) : '';
+      html += `<td class="${cls}">${v !== null && v !== 0 ? fmtPct(v) : ''}</td>`;
+    });
+    const totalCls = r.pvaSummary !== null ? 'cell-' + getStatusClass(r.pvaSummary) : '';
+    html += `<td class="${totalCls}"><strong>${r.pvaSummary !== null ? fmtPct(r.pvaSummary) : ''}</strong></td></tr>`;
+  });
+
+  html += '</tbody></table></div></div>';
+
+  // Milestone Definitions
+  const hasDescriptions = Object.keys(rockMilestoneDescriptions).length > 0;
+  if (hasDescriptions) {
+    html += `<div class="table-card section-rocks">
+      <div class="table-header">Milestone Definitions</div>
+      <div style="padding: 16px 24px;">`;
+    Object.entries(rockMilestoneDescriptions).forEach(([owner, milestones]) => {
+      const rock = rocksData.find(r => r.owner === owner);
+      html += `<div style="margin-bottom:16px;">
+        <span class="dept-badge">${owner}</span>
+        <strong>${rock ? rock.description : ''}</strong>
+        <ul style="margin-top:8px;padding-left:20px;font-size:13px;color:#4b5563;">`;
+      Object.entries(milestones).sort(([a], [b]) => a - b).forEach(([num, desc]) => {
+        html += `<li style="margin-bottom:4px;">${desc}</li>`;
+      });
+      html += '</ul></div>';
+    });
+    html += '</div></div>';
+  }
+
+  document.getElementById('app').innerHTML = html;
+
+  drawRockBarChart();
+  drawRockLineChart();
+}
+
+const ROCK_COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4'];
+
+function drawRockBarChart() {
+  const ctx = document.getElementById('rockBarChart');
+  if (!ctx) return;
+  if (rockBarChart) rockBarChart.destroy();
+
+  const labels = rocksData.map(r => r.owner);
+  const expectedData = rocksData.map(r => r.expectedMilestone);
+  const actualData = rocksData.map(r => r.currentMilestone);
+  const barColors = rocksData.map(r => {
+    if (r.rockStatus === 'on-track') return '#059669';
+    if (r.rockStatus === 'at-risk') return '#d97706';
+    return '#dc2626';
+  });
+
+  rockBarChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Expected Milestone',
+          data: expectedData,
+          backgroundColor: '#94a3b8',
+          borderRadius: 4,
+          barPercentage: 0.8,
+          categoryPercentage: 0.7,
+        },
+        {
+          label: 'Actual Milestone',
+          data: actualData,
+          backgroundColor: barColors,
+          borderRadius: 4,
+          barPercentage: 0.8,
+          categoryPercentage: 0.7,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { usePointStyle: true, padding: 16, font: { size: 12 } } },
+        tooltip: {
+          callbacks: {
+            afterLabel: (ctx) => {
+              if (ctx.datasetIndex === 1) {
+                const rock = rocksData[ctx.dataIndex];
+                return rock.description.substring(0, 50) + (rock.description.length > 50 ? '...' : '');
+              }
+              return '';
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          min: 0,
+          max: 5,
+          grid: { color: '#f3f4f6' },
+          ticks: { stepSize: 1, font: { size: 11 }, callback: v => 'M' + v }
+        },
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+function drawRockLineChart() {
+  const ctx = document.getElementById('rockLineChart');
+  if (!ctx) return;
+  if (rockLineChart) rockLineChart.destroy();
+
+  const datasets = rocksData.map((r, i) => ({
+    label: r.owner,
+    data: r.actualWeekly.map(v => v),
+    borderColor: ROCK_COLORS[i % ROCK_COLORS.length],
+    backgroundColor: 'transparent',
+    borderWidth: 2.5,
+    pointRadius: 3,
+    pointHoverRadius: 5,
+    tension: 0.3,
+    spanGaps: false,
+  }));
+
+  // Average forecast reference line
+  if (rocksData.length > 0) {
+    const avgForecast = rockWeekLabels.map((_, wk) => {
+      const vals = rocksData.map(r => r.forecastWeekly[wk]).filter(v => v !== null);
+      return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    });
+    datasets.push({
+      label: 'Avg Forecast',
+      data: avgForecast,
+      borderColor: '#dc2626',
+      borderDash: [6, 4],
+      borderWidth: 1.5,
+      pointRadius: 0,
+      pointHoverRadius: 0,
+    });
+  }
+
+  rockLineChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: rockWeekLabels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { usePointStyle: true, padding: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: ctx => ctx.dataset.label + ': Milestone ' + (ctx.parsed.y !== null ? ctx.parsed.y : '—')
+          }
+        }
+      },
+      scales: {
+        y: {
+          min: 0,
+          max: 5,
+          grid: { color: '#f3f4f6' },
+          ticks: { stepSize: 1, font: { size: 11 }, callback: v => 'M' + v }
+        },
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+async function loadRocksData() {
+  const btn = document.querySelector('.refresh-btn');
+  if (btn) btn.classList.add('loading');
+
+  try {
+    const res = await fetch(ROCKS_CSV_URL);
+    if (!res.ok) throw new Error('Failed to fetch rocks sheet');
+    const text = await res.text();
+    const rows = parseCSV(text);
+    extractRocksData(rows);
+
+    if (rocksData.length === 0) {
+      document.getElementById('app').innerHTML = `
+        <div class="error-screen">
+          <h2>No rocks found</h2>
+          <p>Could not parse rock data from the spreadsheet.</p>
+        </div>`;
+      return;
+    }
+
+    renderRocks();
+
+    const now = new Date();
+    document.getElementById('lastUpdated').textContent =
+      'Updated ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch (err) {
+    document.getElementById('app').innerHTML = `
+      <div class="error-screen">
+        <h2>Couldn't load rocks data</h2>
+        <p>Make sure the Google Sheet is shared as "Anyone with the link."</p>
+        <p style="margin-top:8px;font-size:12px;color:#6b7280;">${err.message}</p>
+      </div>`;
+  } finally {
+    if (btn) btn.classList.remove('loading');
+  }
+}
+
 // --- Tab switching ---
 function switchTab(tab) {
   currentTab = tab;
@@ -1446,12 +1991,13 @@ function switchTab(tab) {
   const titles = {
     company: 'Q1 2026 Company Scorecard',
     department: 'Q1 2026 Department Scorecard',
+    rocks: 'Q1 2026 Rocks',
   };
   document.querySelector('.header h1').textContent = titles[tab] || titles.company;
 
-  // Show/hide market toggle (department view is global)
+  // Show/hide market toggle (department and rocks views are global)
   const toggle = document.querySelector('.toggle-group');
-  if (tab === 'department') {
+  if (tab === 'department' || tab === 'rocks') {
     toggle.style.display = 'none';
   } else {
     toggle.style.display = 'flex';
@@ -1467,6 +2013,8 @@ function switchTab(tab) {
     loadData();
   } else if (tab === 'department') {
     loadDeptData();
+  } else if (tab === 'rocks') {
+    loadRocksData();
   }
 }
 
@@ -1474,6 +2022,7 @@ loadData();
 setInterval(() => {
   if (currentTab === 'company') loadData();
   else if (currentTab === 'department') loadDeptData();
+  else if (currentTab === 'rocks') loadRocksData();
 }, 5 * 60 * 1000);
 </script>
 </body>
