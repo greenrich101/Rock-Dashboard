@@ -1,0 +1,1478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Q1 2026 Company Scorecard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f7fa;
+      color: #1a1a2e;
+      line-height: 1.5;
+    }
+
+    /* Header */
+    .header {
+      background: linear-gradient(135deg, #1a1a2e, #2d2d44);
+      color: white;
+      padding: 24px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .header h1 { font-size: 24px; font-weight: 600; }
+    .header-sub { font-size: 13px; opacity: 0.7; margin-top: 2px; }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* Market Toggle */
+    .toggle-group {
+      display: flex;
+      background: rgba(255,255,255,0.12);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .toggle-btn {
+      padding: 8px 18px;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      background: transparent;
+      color: rgba(255,255,255,0.7);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .toggle-btn.active {
+      background: white;
+      color: #1a1a2e;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+
+    .refresh-btn {
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      border: 1px solid rgba(255,255,255,0.25);
+      background: transparent;
+      color: white;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+
+    .refresh-btn:hover { background: rgba(255,255,255,0.1); }
+
+    .refresh-btn.loading svg { animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .last-updated { font-size: 12px; opacity: 0.6; }
+
+    /* Main */
+    .main { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+    /* KPI Cards */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .kpi-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    .kpi-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #6b7280;
+      margin-bottom: 8px;
+    }
+
+    .kpi-value {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 4px;
+    }
+
+    .kpi-forecast {
+      font-size: 13px;
+      color: #6b7280;
+      margin-bottom: 12px;
+    }
+
+    .kpi-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+
+    .kpi-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .status-green .kpi-dot { background: #059669; }
+    .status-green { background: #d1fae5; color: #059669; }
+    .status-yellow .kpi-dot { background: #d97706; }
+    .status-yellow { background: #fef3c7; color: #d97706; }
+    .status-red .kpi-dot { background: #dc2626; }
+    .status-red { background: #fee2e2; color: #dc2626; }
+
+    .rca-flag {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: #dc2626;
+      margin-top: 8px;
+    }
+
+    /* Charts */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 768px) {
+      .charts-grid { grid-template-columns: 1fr; }
+    }
+
+    .chart-card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    .chart-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 280px;
+    }
+
+    /* Inventory Banner */
+    .inventory-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      margin-bottom: 24px;
+      display: flex;
+      gap: 32px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .inv-title {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #6b7280;
+    }
+
+    .inv-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .inv-name { font-size: 14px; color: #6b7280; }
+
+    .inv-num {
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .inv-target {
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    /* Data Table */
+    .table-card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+
+    .table-header {
+      padding: 20px 24px 12px;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    thead th {
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #6b7280;
+      border-bottom: 2px solid #e5e7eb;
+      white-space: nowrap;
+    }
+
+    tbody td {
+      padding: 10px 14px;
+      border-bottom: 1px solid #d1d5db;
+      white-space: nowrap;
+    }
+
+    tbody tr:hover { background: #f9fafb; }
+
+    .metric-group-label {
+      font-weight: 600;
+      color: #1a1a2e;
+    }
+
+    .row-type {
+      color: #6b7280;
+      font-size: 12px;
+    }
+
+    .cell-green { background: #d1fae5; color: #059669; border-radius: 4px; font-weight: 600; }
+    .cell-yellow { background: #fef3c7; color: #d97706; border-radius: 4px; font-weight: 600; }
+    .cell-red { background: #fee2e2; color: #dc2626; border-radius: 4px; font-weight: 600; }
+
+    /* Legend */
+    .legend {
+      display: flex;
+      gap: 16px;
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 24px;
+    }
+
+    .legend-item { display: flex; align-items: center; gap: 5px; }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+    /* Loading */
+    .loading-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 50vh;
+      gap: 16px;
+    }
+
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid #e5e7eb;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .loading-text { color: #6b7280; font-size: 14px; }
+
+    .error-screen { text-align: center; padding: 60px 20px; }
+    .error-screen h2 { font-size: 18px; margin-bottom: 8px; }
+    .error-screen p { color: #6b7280; font-size: 14px; }
+
+    /* Bottom Navigation */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #1a1a2e;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 24px;
+      box-shadow: 0 -2px 8px rgba(0,0,0,0.15);
+      z-index: 100;
+    }
+
+    .nav-btn {
+      padding: 10px 20px;
+      font-size: 13px;
+      font-weight: 500;
+      border: none;
+      background: transparent;
+      color: rgba(255,255,255,0.6);
+      cursor: pointer;
+      border-radius: 8px;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .nav-btn:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.9); }
+    .nav-btn.active { background: white; color: #1a1a2e; font-weight: 600; }
+
+    .main { padding-bottom: 72px; }
+
+    /* Department badge */
+    .dept-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: #e0e7ff;
+      color: #3730a3;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    /* Section color coding */
+    .section-inventory .table-header { color: #0369a1; border-left: 4px solid #0ea5e9; padding-left: 20px; }
+    .section-inventory thead th { background: #f0f9ff; }
+    .section-customer-service .table-header { color: #7c3aed; border-left: 4px solid #8b5cf6; padding-left: 20px; }
+    .section-customer-service thead th { background: #f5f3ff; }
+    .section-technology .table-header { color: #b45309; border-left: 4px solid #f59e0b; padding-left: 20px; }
+    .section-technology thead th { background: #fffbeb; }
+    .section-finance .table-header { color: #047857; border-left: 4px solid #10b981; padding-left: 20px; }
+    .section-finance thead th { background: #ecfdf5; }
+    .section-performance .table-header { color: #1e40af; border-left: 4px solid #3b82f6; padding-left: 20px; }
+    .section-performance thead th { background: #eff6ff; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <h1>Q1 2026 Company Scorecard</h1>
+      <div class="header-sub" id="lastUpdated"></div>
+    </div>
+    <div class="header-controls">
+      <div class="toggle-group">
+        <button class="toggle-btn active" data-market="us" onclick="setMarket('us')">🇺🇸 US</button>
+        <button class="toggle-btn" data-market="ca" onclick="setMarket('ca')">🇨🇦 Canada</button>
+      </div>
+      <button class="refresh-btn" onclick="loadData()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+        Refresh
+      </button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div id="app">
+      <div class="loading-screen">
+        <div class="spinner"></div>
+        <div class="loading-text">Loading scorecard...</div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-tab="company" onclick="switchTab('company')">Company Scorecard</button>
+    <button class="nav-btn" data-tab="department" onclick="switchTab('department')">Department Scorecard</button>
+  </nav>
+
+<script>
+const SHEET_ID = '1qhaLjXublAWS4Zj2Tm7OK3jAdlTK4bW87q4TsoPPLog';
+const SHEET_NAME = 'Company Scard';
+const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
+
+let allMetrics = [];
+let inventoryMetrics = [];
+let weekLabels = [];
+let currentMarket = 'us';
+let barChart = null;
+let lineChart = null;
+
+// --- CSV Parser ---
+function parseCSV(text) {
+  const rows = [];
+  let current = '';
+  let inQuotes = false;
+  let row = [];
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') {
+      if (inQuotes && text[i + 1] === '"') { current += '"'; i++; }
+      else inQuotes = !inQuotes;
+    } else if (ch === ',' && !inQuotes) {
+      row.push(current); current = '';
+    } else if ((ch === '\n' || ch === '\r') && !inQuotes) {
+      if (ch === '\r' && text[i + 1] === '\n') i++;
+      row.push(current); rows.push(row); row = []; current = '';
+    } else {
+      current += ch;
+    }
+  }
+  if (current || row.length) { row.push(current); rows.push(row); }
+  return rows;
+}
+
+function cleanNum(val) {
+  if (!val || typeof val !== 'string') return null;
+  const s = val.trim().replace(/[$,\s]/g, '').replace(/%$/, '');
+  if (s === '' || s === '—' || s === '-') return null;
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+
+function getStatusClass(pct, isLowerBetter) {
+  if (pct === null || pct === undefined) return '';
+  if (isLowerBetter) {
+    // Cost metrics: at/under plan = green, slightly over = yellow, way over = red
+    if (pct <= 100) return 'green';
+    if (pct <= 115) return 'yellow';
+    return 'red';
+  }
+  if (pct >= 95) return 'green';
+  if (pct >= 85) return 'yellow';
+  return 'red';
+}
+
+// --- Metric name cleanup ---
+const METRIC_NAMES = {
+  'net sales': 'Total Net Sales',
+  '1st order cm': '1st Order CM (Contribution Margin)',
+  '1st order count': '1st Order Count',
+  'repeat cm$': 'Repeat CM (Contribution Margin)',
+  'repeat cm': 'Repeat CM (Contribution Margin)',
+  'total cm $': 'Total CM (Contribution Margin)',
+  'total cm': 'Total CM (Contribution Margin)',
+};
+
+function cleanMetricName(raw) {
+  const lower = raw.toLowerCase();
+  for (const [key, label] of Object.entries(METRIC_NAMES)) {
+    if (lower.includes(key)) return label;
+  }
+  return raw.replace(/fcast|forecast|\(1000s\)|🇺🇲|🇨🇦/gi, '').replace(/\s+/g, ' ').trim();
+}
+
+// --- Data Extraction ---
+function extractData(rows) {
+  if (rows.length < 3) return;
+
+  // Row 0 has dates, Row 1 has "WK 1", "WK 2" etc.
+  const weekRow = rows[1];
+  weekLabels = [];
+  const dataCols = [];
+  for (let j = 2; j <= 15 && j < weekRow.length; j++) {
+    const val = (weekRow[j] || '').trim();
+    if (val.match(/^WK\s*\d+/i)) {
+      weekLabels.push(val);
+      dataCols.push(j);
+    }
+  }
+
+  // Total column = 16 (index 16)
+  const totalCol = 16;
+  const rcaCol = 17;
+
+  allMetrics = [];
+  inventoryMetrics = [];
+
+  const dataRows = rows.slice(2); // skip header rows
+
+  for (let i = 0; i < dataRows.length; i++) {
+    const row = dataRows[i];
+    if (!row || row.length < 3) continue;
+
+    const col0 = (row[0] || '').trim();
+    const col1 = (row[1] || '').trim();
+    const col1Lower = col1.toLowerCase().replace(/\s+/g, ' ');
+
+    // Detect Forecast rows
+    if (col1Lower.includes('fcast') || col1Lower.includes('forecast')) {
+      const dept = col0 || '';
+      const isCA = col1.includes('🇨🇦') || col1Lower.includes('cad');
+      const region = isCA ? 'ca' : 'us';
+      const name = cleanMetricName(col1);
+      const isCount = col1Lower.includes('count');
+
+      // Forecast weekly values
+      const forecastWeekly = dataCols.map(c => cleanNum(row[c]));
+      const forecastTotal = cleanNum(row[totalCol]);
+
+      // Actuals (next row)
+      const actualsRow = dataRows[i + 1];
+      let actualWeekly = dataCols.map(() => null);
+      let actualTotal = null;
+      if (actualsRow) {
+        actualWeekly = dataCols.map(c => cleanNum(actualsRow[c]));
+        actualTotal = cleanNum(actualsRow[totalCol]);
+      }
+
+      // Plan vs Actual (row after actuals)
+      const pvaRow = dataRows[i + 2];
+      let pvaWeekly = dataCols.map(() => null);
+      let pvaTotal = null;
+      let hasRCA = false;
+      if (pvaRow && (pvaRow[1] || '').toLowerCase().includes('plan vs actual')) {
+        pvaWeekly = dataCols.map(c => cleanNum(pvaRow[c]));
+        pvaTotal = cleanNum(pvaRow[totalCol]);
+        hasRCA = ((pvaRow[rcaCol] || '') + (pvaRow[totalCol + 1] || '')).toLowerCase().includes('rca');
+      }
+
+      // Find latest week with actual data
+      let latestWeekIdx = -1;
+      for (let k = actualWeekly.length - 1; k >= 0; k--) {
+        if (actualWeekly[k] !== null) { latestWeekIdx = k; break; }
+      }
+
+      allMetrics.push({
+        dept, name, region, isCount,
+        forecastWeekly, forecastTotal,
+        actualWeekly, actualTotal,
+        pvaWeekly, pvaTotal,
+        hasRCA, latestWeekIdx,
+      });
+
+      i += 2; // skip actuals + pva rows
+      continue;
+    }
+
+    // Detect inventory rows
+    if (col1Lower.includes('days') && col1Lower.includes('target')) {
+      const targetMatch = col1.match(/target\s*(\d+)/i);
+      const target = targetMatch ? parseInt(targetMatch[1]) : null;
+      const productName = col1.replace(/🇺🇲|🇨🇦/g, '').replace(/target\s*\d+\s*days?/i, '').trim();
+      const vals = dataCols.map(c => cleanNum(row[c]));
+      let latest = null;
+      for (let k = vals.length - 1; k >= 0; k--) {
+        if (vals[k] !== null) { latest = vals[k]; break; }
+      }
+      inventoryMetrics.push({ name: productName, target, latest, vals });
+    }
+  }
+}
+
+function shortName(name) {
+  return name.replace(/\s*\(Contribution Margin\)/g, '');
+}
+
+// --- Format helpers ---
+function fmtCurrency(n, isCount) {
+  if (n === null || n === undefined) return '—';
+  if (isCount) return Math.round(n).toLocaleString();
+  const abs = Math.abs(n);
+  const sign = n < 0 ? '-' : '';
+  return sign + '$' + abs.toFixed(abs >= 100 ? 0 : 1) + 'K';
+}
+
+function fmtPct(n) {
+  if (n === null || n === undefined) return '—';
+  return Math.round(n) + '%';
+}
+
+// --- Render ---
+function render() {
+  const filtered = allMetrics.filter(m => m.region === currentMarket);
+  if (filtered.length === 0 && inventoryMetrics.length === 0) {
+    document.getElementById('app').innerHTML = `
+      <div class="error-screen">
+        <h2>No data for this market</h2>
+        <p>Try switching to the other market toggle.</p>
+      </div>`;
+    return;
+  }
+
+  let html = '';
+
+  // Legend
+  html += `<div class="legend">
+    <span class="legend-item"><span class="legend-dot" style="background:#059669"></span> ≥ 95%</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#d97706"></span> 85–94%</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#dc2626"></span> &lt; 85%</span>
+  </div>`;
+
+  // KPI Cards — sort: AOV first, CAC second, Meta CTR third, rest after
+  const kpiOrder = ['aov', 'cac', 'ctr'];
+  const sortedFiltered = [...filtered].sort((a, b) => {
+    const aName = a.name.toLowerCase();
+    const bName = b.name.toLowerCase();
+    let aIdx = kpiOrder.findIndex(k => aName.includes(k));
+    let bIdx = kpiOrder.findIndex(k => bName.includes(k));
+    if (aIdx === -1) aIdx = kpiOrder.length;
+    if (bIdx === -1) bIdx = kpiOrder.length;
+    return aIdx - bIdx;
+  });
+
+  html += '<div class="kpi-grid">';
+  sortedFiltered.forEach(m => {
+    const status = getStatusClass(m.pvaTotal);
+    const val = m.actualTotal !== null ? fmtCurrency(m.actualTotal, m.isCount) : '—';
+    const fcast = m.forecastTotal !== null ? fmtCurrency(m.forecastTotal, m.isCount) : '—';
+    html += `
+      <div class="kpi-card">
+        <div class="kpi-label">${m.dept ? `<span class="dept-badge">${m.dept}</span>` : ''}${m.name}</div>
+        <div class="kpi-value">${val}</div>
+        <div class="kpi-forecast">of ${fcast} forecast</div>
+        <span class="kpi-badge status-${status}">
+          <span class="kpi-dot"></span>
+          ${fmtPct(m.pvaTotal)} of plan
+        </span>
+        ${m.hasRCA ? '<div class="rca-flag">⚠ RCA Required</div>' : ''}
+      </div>`;
+  });
+  html += '</div>';
+
+  // Find CAC metric for bar chart
+  const cacMetric = filtered.find(m => m.name.toLowerCase().includes('cac')) || filtered[0];
+
+  // Charts
+  html += `<div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">${cacMetric ? shortName(cacMetric.name) : 'Metric'} — Plan vs Actual</div>
+      <div class="chart-container"><canvas id="barChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Weekly Performance (95% Of Target)</div>
+      <div class="chart-container"><canvas id="lineChart"></canvas></div>
+      <div style="margin-top:6px;font-size:10px;color:#9ca3af;">* 1st order contribution margin goal is always relative to new customer number</div>
+    </div>
+  </div>`;
+
+  // Inventory
+  if (inventoryMetrics.length > 0) {
+    html += '<div class="inventory-card"><div class="inv-title">Inventory Days</div>';
+    inventoryMetrics.forEach(m => {
+      const color = (m.latest !== null && m.target && m.latest >= m.target) ? '#059669' : '#dc2626';
+      html += `
+        <div class="inv-item">
+          <span class="inv-name">${m.name}</span>
+          <span class="inv-num" style="color:${color}">${m.latest !== null ? Math.round(m.latest) : '—'}</span>
+          <span class="inv-target">target ${m.target} days</span>
+        </div>`;
+    });
+    html += '</div>';
+  }
+
+  // Data Table
+  html += `<div class="table-card">
+    <div class="table-header">Weekly Breakdown</div>
+    <div class="table-wrapper"><table>
+      <thead><tr>
+        <th>Metric</th><th>Type</th>`;
+  weekLabels.forEach(w => { html += `<th>${w}</th>`; });
+  html += `<th>Total</th></tr></thead><tbody>`;
+
+  filtered.forEach(m => {
+    // Forecast row
+    html += `<tr>
+      <td class="metric-group-label" rowspan="3">${shortName(m.name)}</td>
+      <td class="row-type">Forecast</td>`;
+    m.forecastWeekly.forEach(v => {
+      html += `<td>${v !== null ? (m.isCount ? Math.round(v) : '$' + v) : ''}</td>`;
+    });
+    html += `<td><strong>${m.forecastTotal !== null ? fmtCurrency(m.forecastTotal, m.isCount) : ''}</strong></td></tr>`;
+
+    // Actuals row
+    html += `<tr><td class="row-type">Actual</td>`;
+    m.actualWeekly.forEach(v => {
+      html += `<td>${v !== null ? (m.isCount ? Math.round(v) : '$' + v) : ''}</td>`;
+    });
+    html += `<td><strong>${m.actualTotal !== null ? fmtCurrency(m.actualTotal, m.isCount) : ''}</strong></td></tr>`;
+
+    // PvA row
+    html += `<tr><td class="row-type">% of Plan</td>`;
+    m.pvaWeekly.forEach(v => {
+      const cls = v !== null && v !== 0 ? 'cell-' + getStatusClass(v) : '';
+      html += `<td class="${cls}">${v !== null && v !== 0 ? fmtPct(v) : ''}</td>`;
+    });
+    const totalCls = m.pvaTotal !== null ? 'cell-' + getStatusClass(m.pvaTotal) : '';
+    html += `<td class="${totalCls}"><strong>${fmtPct(m.pvaTotal)}</strong></td></tr>`;
+  });
+
+  html += '</tbody></table></div></div>';
+
+  document.getElementById('app').innerHTML = html;
+
+  // Draw charts
+  drawBarChart(cacMetric);
+  drawLineChart(filtered);
+}
+
+// --- Charts ---
+const METRIC_COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'];
+
+function drawBarChart(metric) {
+  if (!metric) return;
+  const ctx = document.getElementById('barChart');
+  if (!ctx) return;
+  if (barChart) barChart.destroy();
+
+  const labels = weekLabels.slice(0, metric.forecastWeekly.length);
+
+  barChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Plan',
+          data: metric.forecastWeekly.map(v => v !== null ? Math.abs(v) : null),
+          backgroundColor: '#94a3b8',
+          borderRadius: 4,
+          barPercentage: 0.8,
+          categoryPercentage: 0.7,
+        },
+        {
+          label: 'Actual',
+          data: metric.actualWeekly.map(v => v !== null ? Math.abs(v) : null),
+          backgroundColor: '#3b82f6',
+          borderRadius: 4,
+          barPercentage: 0.8,
+          categoryPercentage: 0.7,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { usePointStyle: true, padding: 16, font: { size: 12 } } },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const v = ctx.parsed.y;
+              return ctx.dataset.label + ': ' + (metric.isCount ? v : '$' + v + 'K');
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          grid: { color: '#f3f4f6' },
+          ticks: { font: { size: 11 }, callback: v => metric.isCount ? v : '$' + v + 'K' }
+        },
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+function drawLineChart(metrics) {
+  const ctx = document.getElementById('lineChart');
+  if (!ctx) return;
+  if (lineChart) lineChart.destroy();
+
+  const datasets = metrics.map((m, i) => ({
+    label: shortName(m.name),
+    data: m.pvaWeekly.map(v => (v !== null && v !== 0) ? v : null),
+    borderColor: METRIC_COLORS[i % METRIC_COLORS.length],
+    backgroundColor: 'transparent',
+    borderWidth: 2.5,
+    pointRadius: 3,
+    pointHoverRadius: 5,
+    tension: 0.3,
+    spanGaps: false,
+  }));
+
+  // 95% target line
+  datasets.push({
+    label: '95% Target',
+    data: weekLabels.map(() => 95),
+    borderColor: '#dc2626',
+    borderDash: [6, 4],
+    borderWidth: 1.5,
+    pointRadius: 0,
+    pointHoverRadius: 0,
+  });
+
+  lineChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: weekLabels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { usePointStyle: true, padding: 12, font: { size: 11 } } },
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y !== null ? ctx.parsed.y + '%' : '—') } }
+      },
+      scales: {
+        y: {
+          min: 0,
+          max: 250,
+          grid: { color: '#f3f4f6' },
+          ticks: { font: { size: 11 }, callback: v => v + '%' }
+        },
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+// --- Market toggle ---
+function setMarket(market) {
+  currentMarket = market;
+  document.querySelectorAll('.toggle-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.market === market);
+  });
+  render();
+}
+
+// --- Load ---
+async function loadData() {
+  const btn = document.querySelector('.refresh-btn');
+  if (btn) btn.classList.add('loading');
+
+  try {
+    const res = await fetch(CSV_URL);
+    if (!res.ok) throw new Error('Failed to fetch sheet');
+    const text = await res.text();
+    const rows = parseCSV(text);
+    extractData(rows);
+
+    if (allMetrics.length === 0) {
+      document.getElementById('app').innerHTML = `
+        <div class="error-screen">
+          <h2>No metrics found</h2>
+          <p>Could not parse data from the spreadsheet.</p>
+        </div>`;
+      return;
+    }
+
+    render();
+
+    const now = new Date();
+    document.getElementById('lastUpdated').textContent =
+      'Updated ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch (err) {
+    document.getElementById('app').innerHTML = `
+      <div class="error-screen">
+        <h2>Couldn't load data</h2>
+        <p>Make sure the Google Sheet is shared as "Anyone with the link."</p>
+        <p style="margin-top:8px;font-size:12px;color:#6b7280;">${err.message}</p>
+      </div>`;
+  } finally {
+    if (btn) btn.classList.remove('loading');
+  }
+}
+
+// --- Department Scorecard ---
+const DEPT_SHEET_NAME = 'Dept S.cards';
+const DEPT_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(DEPT_SHEET_NAME)}`;
+
+let deptSections = [];
+let deptWeekLabels = [];
+let deptBarChart = null;
+let deptLineChart = null;
+let currentTab = 'company';
+
+// Section headers in the sheet
+const SECTION_HEADERS = ['inventory', 'customer service', 'technology', 'finance'];
+
+function extractDeptData(rows) {
+  if (rows.length < 3) return;
+
+  const weekRow = rows[1];
+  deptWeekLabels = [];
+  const dataCols = [];
+  for (let j = 2; j <= 15 && j < weekRow.length; j++) {
+    const val = (weekRow[j] || '').trim();
+    if (val.match(/^WK\s*\d+/i)) {
+      deptWeekLabels.push(val);
+      dataCols.push(j);
+    }
+  }
+
+  deptSections = [];
+  let currentSection = { title: 'Performance', metrics: [] };
+  deptSections.push(currentSection);
+
+  const dataRows = rows.slice(2);
+
+  for (let i = 0; i < dataRows.length; i++) {
+    const row = dataRows[i];
+    if (!row || row.length < 2) continue;
+
+    const col0 = (row[0] || '').trim();
+    const col1 = (row[1] || '').trim();
+    const col1Lower = col1.toLowerCase().trim();
+
+    // Skip empty rows
+    if (!col0 && !col1) continue;
+
+    // Detect section headers (col0 has a value, col1 is empty)
+    if (col0 && !col1) {
+      const lowerCol0 = col0.toLowerCase();
+      if (SECTION_HEADERS.some(s => lowerCol0.includes(s))) {
+        currentSection = { title: col0, metrics: [] };
+        deptSections.push(currentSection);
+        continue;
+      }
+    }
+
+    // Detect triplet: Forecast row followed by Actuals + Plan vs Actual
+    const nextRow = dataRows[i + 1];
+    const pvaRow = dataRows[i + 2];
+    const hasActuals = nextRow && (nextRow[1] || '').toLowerCase().includes('actual');
+    const hasPva = pvaRow && (pvaRow[1] || '').toLowerCase().includes('plan vs actual');
+
+    if (col1 && hasActuals && hasPva) {
+      // This is a forecast/actual/pva triplet
+      const dept = col0 || (nextRow[0] || '').trim() || (pvaRow[0] || '').trim();
+      const name = col1.replace(/fcast|forecast/gi, '').replace(/🌐|🇺🇲|🇨🇦/g, '').trim();
+      const weekly = dataCols.map(c => cleanNum(row[c]));
+      const actualWeekly = dataCols.map(c => cleanNum(nextRow[c]));
+      const pvaWeekly = dataCols.map(c => cleanNum(pvaRow[c]));
+
+      // Total col (col index 16 or first non-empty after week cols)
+      let forecastTotal = null, actualTotal = null, pvaTotal = null;
+      for (let t = dataCols[dataCols.length - 1] + 1; t < row.length && t <= 17; t++) {
+        const v = cleanNum(row[t]);
+        if (v !== null) { forecastTotal = v; break; }
+      }
+      for (let t = dataCols[dataCols.length - 1] + 1; t < nextRow.length && t <= 17; t++) {
+        const v = cleanNum(nextRow[t]);
+        if (v !== null) { actualTotal = v; break; }
+      }
+      for (let t = dataCols[dataCols.length - 1] + 1; t < pvaRow.length && t <= 17; t++) {
+        const v = cleanNum(pvaRow[t]);
+        if (v !== null) { pvaTotal = v; break; }
+      }
+
+      // Detect if values are currency (raw cell starts with $ or name contains USD/CAD/$)
+      const rawFirstVal = (row[dataCols[0]] || '').trim();
+      const isCurrency = rawFirstVal.startsWith('$') || /usd|cad|\$/i.test(col1);
+
+      // Cost metrics where going over plan is bad
+      const nameLower = col1.toLowerCase();
+      const isLowerBetter = /cac|cost/i.test(nameLower);
+
+      currentSection.metrics.push({
+        type: 'triplet',
+        dept, name, isCurrency, isLowerBetter,
+        forecastWeekly: weekly, forecastTotal,
+        actualWeekly, actualTotal,
+        pvaWeekly, pvaTotal,
+      });
+
+      i += 2; // skip actuals + pva rows
+      continue;
+    }
+
+    // Standalone metric row (has dept code and values)
+    if (col0 && col1) {
+      const dept = col0;
+      const name = col1.replace(/🌐|🇺🇲|🇨🇦/g, '').trim();
+      const weekly = dataCols.map(c => cleanNum(row[c]));
+
+      let total = null;
+      for (let t = dataCols[dataCols.length - 1] + 1; t < row.length && t <= 17; t++) {
+        const v = cleanNum(row[t]);
+        if (v !== null) { total = v; break; }
+      }
+
+      // Determine if it has a target embedded in the name
+      const targetMatch = col1.match(/(\d+[\.]?\d*)\s*(%|min|s\b|\/|<)/i);
+      const { target: parsedTarget, isLowerBetter } = extractTarget(col1);
+
+      currentSection.metrics.push({
+        type: 'standalone',
+        dept, name, weekly, total,
+        targetMatch: targetMatch ? targetMatch[0] : null,
+        parsedTarget,
+        isLowerBetter,
+      });
+      continue;
+    }
+  }
+
+  // Remove empty sections
+  deptSections = deptSections.filter(s => s.metrics.length > 0);
+}
+
+// --- Target extraction from metric names ---
+function extractTarget(metricName) {
+  const name = metricName;
+  const nameLower = name.toLowerCase();
+  let target = null;
+  let isLowerBetter = false;
+
+  // Pattern: $XX.XX (dollar amount targets — cost, lower is better)
+  const dollarMatch = name.match(/\$\s*(\d+\.?\d*)/);
+  if (dollarMatch) {
+    target = parseFloat(dollarMatch[1]);
+    isLowerBetter = true;
+  }
+
+  // Pattern: XX% (percentage targets — rates, higher is better)
+  if (target === null) {
+    const pctMatch = name.match(/(\d+\.?\d*)\s*%/);
+    if (pctMatch) {
+      target = parseFloat(pctMatch[1]);
+      isLowerBetter = false;
+    }
+  }
+
+  // Pattern: (XXK) — parenthesized K-suffixed targets like (30K), (50K)
+  if (target === null) {
+    const kParenMatch = name.match(/\((\d+\.?\d*)\s*K\)/i);
+    if (kParenMatch && kParenMatch[1] !== '1000') {
+      target = parseFloat(kParenMatch[1]);
+      isLowerBetter = false; // Volume/list targets: higher is better
+    }
+  }
+
+  // Pattern: <XX or ≤XX (explicit less-than targets)
+  const ltMatch = name.match(/[<≤]\s*(\d+\.?\d*)/);
+  if (ltMatch) {
+    target = parseFloat(ltMatch[1]);
+    isLowerBetter = true;
+  }
+
+  // Pattern: XXmin, XXs, XXhrs (time targets — lower is better)
+  if (target === null) {
+    const timeMatch = name.match(/(\d+\.?\d*)\s*(min|mins|minutes|s|sec|seconds|hrs|hours)/i);
+    if (timeMatch) {
+      target = parseFloat(timeMatch[1]);
+      isLowerBetter = true;
+    }
+  }
+
+  // Fallback: general number before /, min, s, etc.
+  if (target === null) {
+    const numMatch = name.match(/(\d+\.?\d*)\s*(%|min|s\b|\/|<)/i);
+    if (numMatch) {
+      target = parseFloat(numMatch[1]);
+    }
+  }
+
+  // Keyword overrides for directionality
+  const lowerKeywords = ['ship', 'cost', 'cac', 'time', 'response', 'wait', 'delay', 'abandon', 'cancel', 'return'];
+  if (lowerKeywords.some(k => nameLower.includes(k))) {
+    isLowerBetter = true;
+  }
+
+  return { target, isLowerBetter };
+}
+
+function getTargetStatusClass(actual, target, isLowerBetter) {
+  if (actual === null || target === null || target === 0) return '';
+
+  if (isLowerBetter) {
+    // At or below target = green, up to 15% over = yellow, else red
+    const ratio = actual / target;
+    if (ratio <= 1.0) return 'green';
+    if (ratio <= 1.15) return 'yellow';
+    return 'red';
+  } else {
+    // Higher is better: ≥95% of target = green, ≥85% = yellow, else red
+    const pct = (actual / target) * 100;
+    if (pct >= 95) return 'green';
+    if (pct >= 85) return 'yellow';
+    return 'red';
+  }
+}
+
+function fmtDeptVal(v) {
+  if (v === null || v === undefined) return '—';
+  if (Math.abs(v) >= 1000) return '$' + (v / 1000).toFixed(1) + 'K';
+  if (Number.isInteger(v)) return v.toLocaleString();
+  return v % 1 === 0 ? v.toLocaleString() : v.toFixed(1);
+}
+
+function renderDept() {
+  const allMetrics = deptSections.flatMap(s => s.metrics);
+  if (allMetrics.length === 0) {
+    document.getElementById('app').innerHTML = `
+      <div class="error-screen">
+        <h2>No department data found</h2>
+        <p>Could not parse data from the Dept S.cards sheet.</p>
+      </div>`;
+    return;
+  }
+
+  let html = '';
+
+  // Legend
+  html += `<div class="legend">
+    <span class="legend-item"><span class="legend-dot" style="background:#059669"></span> ≥ 95%</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#d97706"></span> 85–94%</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#dc2626"></span> &lt; 85%</span>
+  </div>`;
+
+  // KPI Cards — only these 4 metrics, in order (search all metrics, not just triplets)
+  const triplets = allMetrics.filter(m => m.type === 'triplet');
+  const topBoxKeys = [
+    { key: 'aov', exclude: 'repeat' },  // NC $ AOV (not repeat)
+    { key: 'cac' },                       // CAC
+    { key: 'ctr' },                       // Meta CTR
+    { key: 'repeat' },                    // Repeat Net $ AOV
+  ];
+  const topBoxMetrics = topBoxKeys.map(({ key, exclude }) => {
+    // Prefer triplet metrics (have forecast/actual/plan data)
+    return allMetrics.find(m => {
+      const n = m.name.toLowerCase();
+      return m.type === 'triplet' && n.includes(key) && (!exclude || !n.includes(exclude));
+    }) || allMetrics.find(m => {
+      const n = m.name.toLowerCase();
+      return n.includes(key) && (!exclude || !n.includes(exclude));
+    });
+  }).filter(Boolean);
+
+  if (topBoxMetrics.length > 0) {
+    html += '<div class="kpi-grid">';
+    topBoxMetrics.forEach(m => {
+      const isTriplet = m.type === 'triplet';
+      let val, status, fcast, pctLabel;
+
+      if (isTriplet) {
+        const fmtVal = (v) => {
+          if (v === null || v === undefined) return '—';
+          if (m.isCurrency) {
+            const abs = Math.abs(v);
+            const sign = v < 0 ? '-' : '';
+            if (abs >= 1000) return sign + '$' + (abs / 1000).toFixed(1) + 'K';
+            return sign + '$' + Math.round(abs);
+          }
+          return fmtDeptVal(v);
+        };
+        val = fmtVal(m.actualTotal);
+        fcast = fmtVal(m.forecastTotal);
+        // Compute pva from actuals/forecast if pvaTotal is missing
+        const pva = m.pvaTotal !== null ? m.pvaTotal :
+          (m.actualTotal !== null && m.forecastTotal ? (m.actualTotal / m.forecastTotal) * 100 : null);
+        status = getStatusClass(pva, m.isLowerBetter);
+        pctLabel = fmtPct(pva);
+      } else {
+        // Standalone: get latest weekly value and compute status vs parsed target
+        let latestVal = null;
+        for (let k = m.weekly.length - 1; k >= 0; k--) {
+          if (m.weekly[k] !== null) { latestVal = m.weekly[k]; break; }
+        }
+        val = latestVal !== null ? fmtDeptVal(latestVal) : (m.total !== null ? fmtDeptVal(m.total) : '—');
+        const targetNum = m.parsedTarget !== undefined ? m.parsedTarget : (m.targetMatch ? parseFloat(m.targetMatch) : null);
+        const actualForPct = latestVal !== null ? latestVal : m.total;
+        status = (actualForPct !== null && targetNum !== null)
+          ? getTargetStatusClass(actualForPct, targetNum, m.isLowerBetter)
+          : '';
+        const pct = (actualForPct !== null && targetNum) ? (actualForPct / targetNum) * 100 : null;
+        fcast = targetNum !== null ? fmtDeptVal(targetNum) + (m.name.includes('%') ? '%' : '') : null;
+        pctLabel = fmtPct(pct);
+      }
+
+      html += `
+        <div class="kpi-card">
+          <div class="kpi-label">
+            <span class="dept-badge">${m.dept}</span>${m.name}
+          </div>
+          <div class="kpi-value">${val}</div>
+          ${isTriplet
+            ? `<div class="kpi-forecast">of ${fcast} forecast</div>
+               <span class="kpi-badge status-${status}">
+                 <span class="kpi-dot"></span>
+                 ${pctLabel} of plan
+               </span>`
+            : `${fcast ? `<div class="kpi-forecast">target ${fcast}</div>` : ''}
+               ${status ? `<span class="kpi-badge status-${status}">
+                 <span class="kpi-dot"></span>
+                 ${pctLabel} of target
+               </span>` : ''}`
+          }
+        </div>`;
+    });
+    html += '</div>';
+  }
+
+  // Charts for triplets — use CAC metric for actuals bar chart
+  const cacMetric = triplets.find(m => m.name.toLowerCase().includes('cac')) || triplets[0];
+  if (triplets.length > 0) {
+    html += `<div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-title">CAC 🇺🇲 Actuals USD</div>
+        <div class="chart-container"><canvas id="deptBarChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Weekly Performance (95% Target)</div>
+        <div class="chart-container"><canvas id="deptLineChart"></canvas></div>
+      </div>
+    </div>`;
+  }
+
+  // Sections as tables
+  deptSections.forEach(section => {
+    const sectionSlug = section.title.toLowerCase().replace(/\s+/g, '-');
+    html += `<div class="table-card section-${sectionSlug}">
+      <div class="table-header">${section.title}</div>
+      <div class="table-wrapper"><table>
+        <thead><tr>
+          <th>Dept</th><th>Metric</th><th>Type</th>`;
+    deptWeekLabels.forEach(w => { html += `<th>${w}</th>`; });
+    html += `<th>Total</th></tr></thead><tbody>`;
+
+    section.metrics.forEach(m => {
+      if (m.type === 'triplet') {
+        html += `<tr>
+          <td class="metric-group-label" rowspan="3">${m.dept}</td>
+          <td class="metric-group-label" rowspan="3">${m.name}</td>
+          <td class="row-type">Forecast</td>`;
+        m.forecastWeekly.forEach(v => {
+          html += `<td>${v !== null ? fmtDeptVal(v) : ''}</td>`;
+        });
+        html += `<td><strong>${m.forecastTotal !== null ? fmtDeptVal(m.forecastTotal) : ''}</strong></td></tr>`;
+
+        html += `<tr><td class="row-type">Actual</td>`;
+        m.actualWeekly.forEach(v => {
+          html += `<td>${v !== null ? fmtDeptVal(v) : ''}</td>`;
+        });
+        html += `<td><strong>${m.actualTotal !== null ? fmtDeptVal(m.actualTotal) : ''}</strong></td></tr>`;
+
+        html += `<tr><td class="row-type">% of Plan</td>`;
+        m.pvaWeekly.forEach(v => {
+          const cls = v !== null && v !== 0 ? 'cell-' + getStatusClass(v, m.isLowerBetter) : '';
+          html += `<td class="${cls}">${v !== null && v !== 0 ? fmtPct(v) : ''}</td>`;
+        });
+        const totalCls = m.pvaTotal !== null ? 'cell-' + getStatusClass(m.pvaTotal, m.isLowerBetter) : '';
+        html += `<td class="${totalCls}"><strong>${fmtPct(m.pvaTotal)}</strong></td></tr>`;
+      } else {
+        // Standalone — color-code cells based on target
+        html += `<tr>
+          <td class="metric-group-label">${m.dept}</td>
+          <td class="metric-group-label">${m.name}</td>
+          <td class="row-type">Actual</td>`;
+        m.weekly.forEach(v => {
+          const cls = (v !== null && m.parsedTarget !== null)
+            ? 'cell-' + getTargetStatusClass(v, m.parsedTarget, m.isLowerBetter)
+            : '';
+          html += `<td class="${cls}">${v !== null ? fmtDeptVal(v) : ''}</td>`;
+        });
+        const totalCls = (m.total !== null && m.parsedTarget !== null)
+          ? 'cell-' + getTargetStatusClass(m.total, m.parsedTarget, m.isLowerBetter)
+          : '';
+        html += `<td class="${totalCls}"><strong>${m.total !== null ? fmtDeptVal(m.total) : ''}</strong></td></tr>`;
+      }
+    });
+
+    html += '</tbody></table></div></div>';
+  });
+
+  document.getElementById('app').innerHTML = html;
+
+  // Draw charts
+  if (triplets.length > 0) {
+    const cacForChart = triplets.find(m => m.name.toLowerCase().includes('cac')) || triplets[0];
+    drawDeptBarChart(cacForChart);
+    drawDeptLineChart(triplets);
+  }
+}
+
+function drawDeptBarChart(metric) {
+  if (!metric) return;
+  const ctx = document.getElementById('deptBarChart');
+  if (!ctx) return;
+  if (deptBarChart) deptBarChart.destroy();
+
+  deptBarChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: deptWeekLabels.slice(0, metric.forecastWeekly.length),
+      datasets: [
+        {
+          label: 'Plan',
+          data: metric.forecastWeekly.map(v => v !== null ? Math.abs(v) : null),
+          backgroundColor: '#94a3b8',
+          borderRadius: 4,
+          barPercentage: 0.8,
+          categoryPercentage: 0.7,
+        },
+        {
+          label: 'Actual',
+          data: metric.actualWeekly.map(v => v !== null ? Math.abs(v) : null),
+          backgroundColor: '#3b82f6',
+          borderRadius: 4,
+          barPercentage: 0.8,
+          categoryPercentage: 0.7,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { usePointStyle: true, padding: 16, font: { size: 12 } } },
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          grid: { color: '#f3f4f6' },
+          ticks: { font: { size: 11 } }
+        },
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+function drawDeptLineChart(metrics) {
+  const ctx = document.getElementById('deptLineChart');
+  if (!ctx) return;
+  if (deptLineChart) deptLineChart.destroy();
+
+  const datasets = metrics.filter(m => m.pvaWeekly.some(v => v !== null && v !== 0)).map((m, i) => ({
+    label: m.name,
+    data: m.pvaWeekly.map(v => (v !== null && v !== 0) ? v : null),
+    borderColor: METRIC_COLORS[i % METRIC_COLORS.length],
+    backgroundColor: 'transparent',
+    borderWidth: 2.5,
+    pointRadius: 3,
+    pointHoverRadius: 5,
+    tension: 0.3,
+    spanGaps: false,
+  }));
+
+  datasets.push({
+    label: '95% Target',
+    data: deptWeekLabels.map(() => 95),
+    borderColor: '#dc2626',
+    borderDash: [6, 4],
+    borderWidth: 1.5,
+    pointRadius: 0,
+    pointHoverRadius: 0,
+  });
+
+  deptLineChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: deptWeekLabels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { usePointStyle: true, padding: 12, font: { size: 11 } } },
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y !== null ? ctx.parsed.y + '%' : '—') } }
+      },
+      scales: {
+        y: {
+          min: 0,
+          max: 200,
+          grid: { color: '#f3f4f6' },
+          ticks: { font: { size: 11 }, callback: v => v + '%' }
+        },
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+async function loadDeptData() {
+  const btn = document.querySelector('.refresh-btn');
+  if (btn) btn.classList.add('loading');
+
+  try {
+    const res = await fetch(DEPT_CSV_URL);
+    if (!res.ok) throw new Error('Failed to fetch department sheet');
+    const text = await res.text();
+    const rows = parseCSV(text);
+    extractDeptData(rows);
+
+    const allMetrics = deptSections.flatMap(s => s.metrics);
+    if (allMetrics.length === 0) {
+      document.getElementById('app').innerHTML = `
+        <div class="error-screen">
+          <h2>No department metrics found</h2>
+          <p>Could not parse data from the Dept S.cards sheet.</p>
+        </div>`;
+      return;
+    }
+
+    renderDept();
+
+    const now = new Date();
+    document.getElementById('lastUpdated').textContent =
+      'Updated ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch (err) {
+    document.getElementById('app').innerHTML = `
+      <div class="error-screen">
+        <h2>Couldn't load department data</h2>
+        <p>Make sure the Google Sheet is shared as "Anyone with the link."</p>
+        <p style="margin-top:8px;font-size:12px;color:#6b7280;">${err.message}</p>
+      </div>`;
+  } finally {
+    if (btn) btn.classList.remove('loading');
+  }
+}
+
+// --- Tab switching ---
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+
+  // Update header title
+  const titles = {
+    company: 'Q1 2026 Company Scorecard',
+    department: 'Q1 2026 Department Scorecard',
+  };
+  document.querySelector('.header h1').textContent = titles[tab] || titles.company;
+
+  // Show/hide market toggle (department view is global)
+  const toggle = document.querySelector('.toggle-group');
+  if (tab === 'department') {
+    toggle.style.display = 'none';
+  } else {
+    toggle.style.display = 'flex';
+  }
+
+  document.getElementById('app').innerHTML = `
+    <div class="loading-screen">
+      <div class="spinner"></div>
+      <div class="loading-text">Loading scorecard...</div>
+    </div>`;
+
+  if (tab === 'company') {
+    loadData();
+  } else if (tab === 'department') {
+    loadDeptData();
+  }
+}
+
+loadData();
+setInterval(() => {
+  if (currentTab === 'company') loadData();
+  else if (currentTab === 'department') loadDeptData();
+}, 5 * 60 * 1000);
+</script>
+</body>
+</html>
