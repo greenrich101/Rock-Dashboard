@@ -445,6 +445,68 @@
       font-size: 13px;
       font-weight: 600;
     }
+
+    /* Password Modal */
+    .pw-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+    }
+
+    .pw-modal {
+      background: #1a1a2e;
+      color: white;
+      border-radius: 12px;
+      padding: 32px;
+      width: 320px;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+
+    .pw-modal h3 {
+      font-size: 18px;
+      margin-bottom: 16px;
+    }
+
+    .pw-modal input {
+      width: 100%;
+      padding: 10px 14px;
+      font-size: 14px;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.1);
+      color: white;
+      outline: none;
+      margin-bottom: 12px;
+    }
+
+    .pw-modal input::placeholder { color: rgba(255,255,255,0.4); }
+    .pw-modal input:focus { border-color: rgba(255,255,255,0.5); }
+
+    .pw-modal button {
+      width: 100%;
+      padding: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      background: white;
+      color: #1a1a2e;
+      cursor: pointer;
+    }
+
+    .pw-modal button:hover { opacity: 0.9; }
+
+    .pw-error {
+      color: #f87171;
+      font-size: 13px;
+      margin-top: 8px;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -480,6 +542,15 @@
     <button class="nav-btn" data-tab="department" onclick="switchTab('department')">Department Scorecard</button>
     <button class="nav-btn" data-tab="rocks" onclick="switchTab('rocks')">Rocks</button>
   </nav>
+
+  <div class="pw-overlay" id="pwOverlay" style="display:none;">
+    <div class="pw-modal">
+      <h3>Enter Password</h3>
+      <input type="password" id="pwInput" placeholder="Password" onkeydown="if(event.key==='Enter')checkRocksPassword()">
+      <button onclick="checkRocksPassword()">Unlock</button>
+      <div class="pw-error" id="pwError">Incorrect password</div>
+    </div>
+  </div>
 
 <script>
 const SHEET_ID = '1qhaLjXublAWS4Zj2Tm7OK3jAdlTK4bW87q4TsoPPLog';
@@ -1965,8 +2036,40 @@ async function loadRocksData() {
   }
 }
 
+// --- Password gate for Rocks ---
+const ROCKS_PW_HASH = '88ad931483ff2d28191c8119d9a7669feb286abae3bc9be00a4ea1cf7e80b939';
+
+async function hashPassword(pw) {
+  const data = new TextEncoder().encode(pw);
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function checkRocksPassword() {
+  const input = document.getElementById('pwInput');
+  const hash = await hashPassword(input.value);
+  if (hash === ROCKS_PW_HASH) {
+    sessionStorage.setItem('rocksUnlocked', '1');
+    document.getElementById('pwOverlay').style.display = 'none';
+    input.value = '';
+    document.getElementById('pwError').style.display = 'none';
+    switchTab('rocks');
+  } else {
+    document.getElementById('pwError').style.display = 'block';
+    input.value = '';
+    input.focus();
+  }
+}
+
 // --- Tab switching ---
 function switchTab(tab) {
+  // Password gate for Rocks tab
+  if (tab === 'rocks' && sessionStorage.getItem('rocksUnlocked') !== '1') {
+    document.getElementById('pwOverlay').style.display = 'flex';
+    document.getElementById('pwInput').focus();
+    return;
+  }
+
   currentTab = tab;
   document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tab === tab);
