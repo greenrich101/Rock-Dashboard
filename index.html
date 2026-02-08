@@ -1757,7 +1757,11 @@ function renderRocks() {
     // Forecast row
     html += `<tr>
       <td class="metric-group-label" rowspan="3">${r.owner}</td>
-      <td class="metric-group-label" rowspan="3" style="max-width:200px;white-space:normal;font-size:12px;">${r.description}</td>
+      <td class="metric-group-label" rowspan="3" style="max-width:200px;white-space:normal;font-size:12px;">
+              <span>${r.description.length > 20 ? r.description.substring(0, 20) + '...' : r.description}</span>
+              ${r.description.length > 20 ? `<span style="display:none;">${r.description}</span>
+              <button onclick="const td=this.parentElement;const spans=td.querySelectorAll('span');spans[0].style.display=spans[0].style.display==='none'?'':'none';spans[1].style.display=spans[1].style.display==='none'?'':'none';this.textContent=this.textContent==='more'?'less':'more';" style="background:none;border:none;color:#3b82f6;cursor:pointer;font-size:11px;padding:0 4px;">more</button>` : ''}
+            </td>
       <td class="row-type">Forecast</td>`;
     r.forecastWeekly.forEach(v => {
       html += `<td>${v !== null ? v : ''}</td>`;
