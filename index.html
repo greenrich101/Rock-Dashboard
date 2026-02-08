@@ -952,6 +952,7 @@ function extractDeptData(rows) {
     if (col1 && hasActuals && hasPva) {
       // This is a forecast/actual/pva triplet
       const dept = col0 || (nextRow[0] || '').trim() || (pvaRow[0] || '').trim();
+      const flag = col1.includes('🇨🇦') ? '🇨🇦' : col1.includes('🌐') ? '🌐' : '🇺🇸';
       const name = col1.replace(/fcast|forecast/gi, '').replace(/🌐|🇺🇲|🇨🇦/g, '').trim();
       const weekly = dataCols.map(c => cleanNum(row[c]));
       const actualWeekly = dataCols.map(c => cleanNum(nextRow[c]));
@@ -982,7 +983,7 @@ function extractDeptData(rows) {
 
       currentSection.metrics.push({
         type: 'triplet',
-        dept, name, isCurrency, isLowerBetter,
+        dept, name, flag, isCurrency, isLowerBetter,
         forecastWeekly: weekly, forecastTotal,
         actualWeekly, actualTotal,
         pvaWeekly, pvaTotal,
@@ -995,6 +996,7 @@ function extractDeptData(rows) {
     // Standalone metric row (has dept code and values)
     if (col0 && col1) {
       const dept = col0;
+      const flag = col1.includes('🇨🇦') ? '🇨🇦' : col1.includes('🌐') ? '🌐' : '🇺🇸';
       const name = col1.replace(/🌐|🇺🇲|🇨🇦/g, '').trim();
       const weekly = dataCols.map(c => cleanNum(row[c]));
 
@@ -1010,7 +1012,7 @@ function extractDeptData(rows) {
 
       currentSection.metrics.push({
         type: 'standalone',
-        dept, name, weekly, total,
+        dept, name, flag, weekly, total,
         targetMatch: targetMatch ? targetMatch[0] : null,
         parsedTarget,
         isLowerBetter,
@@ -1196,7 +1198,7 @@ function renderDept() {
       html += `
         <div class="kpi-card">
           <div class="kpi-label">
-            <span class="dept-badge">${m.dept}</span>${m.name}
+            <span class="dept-badge">${m.dept}</span>${m.flag ? m.flag + ' ' : ''}${m.name}
           </div>
           <div class="kpi-value">${val}</div>
           ${isTriplet
@@ -1246,7 +1248,7 @@ function renderDept() {
       if (m.type === 'triplet') {
         html += `<tr>
           <td class="metric-group-label" rowspan="3">${m.dept}</td>
-          <td class="metric-group-label" rowspan="3">${m.name}</td>
+          <td class="metric-group-label" rowspan="3">${m.flag ? m.flag + ' ' : ''}${m.name}</td>
           <td class="row-type">Forecast</td>`;
         m.forecastWeekly.forEach(v => {
           html += `<td>${v !== null ? fmtDeptVal(v) : ''}</td>`;
@@ -1270,7 +1272,7 @@ function renderDept() {
         // Standalone — color-code cells based on target
         html += `<tr>
           <td class="metric-group-label">${m.dept}</td>
-          <td class="metric-group-label">${m.name}</td>
+          <td class="metric-group-label">${m.flag ? m.flag + ' ' : ''}${m.name}</td>
           <td class="row-type">Actual</td>`;
         m.weekly.forEach(v => {
           const cls = (v !== null && m.parsedTarget !== null)
