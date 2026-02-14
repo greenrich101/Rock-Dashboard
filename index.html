@@ -117,10 +117,32 @@
       margin-bottom: 4px;
     }
 
+    .kpi-qtd-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #9ca3af;
+      margin-bottom: 2px;
+    }
+
     .kpi-forecast {
       font-size: 13px;
       color: #6b7280;
-      margin-bottom: 12px;
+      margin-bottom: 4px;
+    }
+
+    .kpi-diff {
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+
+    .kpi-rca {
+      font-size: 12px;
+      font-weight: 700;
+      color: #dc2626;
+      margin-top: 8px;
     }
 
     .kpi-badge {
@@ -243,6 +265,10 @@
       overflow-x: auto;
     }
 
+    .section-performance .table-wrapper table {
+      width: auto;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
@@ -282,6 +308,31 @@
     .cell-green { background: #d1fae5; color: #059669; border-radius: 4px; font-weight: 600; }
     .cell-yellow { background: #fef3c7; color: #d97706; border-radius: 4px; font-weight: 600; }
     .cell-red { background: #fee2e2; color: #dc2626; border-radius: 4px; font-weight: 600; }
+
+    .row-forecast td { color: #6b7280; font-size: 12px; }
+    .row-actual td { font-weight: 500; }
+    .row-pva td { font-size: 12px; }
+    .row-standalone td { }
+    tbody tr.row-pva + tr.row-forecast td { border-top: 2px solid #e5e7eb; }
+
+    /* CM Info Box */
+    .cm-info-box {
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-left: 4px solid #0ea5e9;
+      border-radius: 8px;
+      padding: 18px 22px;
+      margin-bottom: 20px;
+      font-size: 16px;
+      color: #374151;
+      line-height: 1.7;
+    }
+    .cm-info-box strong {
+      display: block;
+      font-size: 18px;
+      color: #0369a1;
+      margin-bottom: 10px;
+    }
 
     /* Legend */
     .legend {
@@ -507,6 +558,70 @@
       margin-top: 8px;
       display: none;
     }
+
+    /* AovCacWhatIfCard */
+    .whatif-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      padding: 24px 28px;
+      max-width: 420px;
+    }
+    .whatif-card h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 4px;
+    }
+    .whatif-subtitle {
+      font-size: 12px;
+      color: #9ca3af;
+      margin-bottom: 20px;
+    }
+    .whatif-cm {
+      font-size: 48px;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 6px;
+      transition: color .2s;
+    }
+    .whatif-cm.positive { color: #059669; }
+    .whatif-cm.negative { color: #dc2626; }
+    .whatif-breakdown {
+      font-size: 13px;
+      color: #6b7280;
+      margin-bottom: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .whatif-breakeven {
+      font-size: 12px;
+      font-weight: 500;
+      color: #6b7280;
+      background: #f3f4f6;
+      border-radius: 6px;
+      padding: 6px 10px;
+      margin-bottom: 20px;
+    }
+    .whatif-sliders { display: flex; flex-direction: column; gap: 16px; }
+    .whatif-slider-group label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: 500;
+      color: #374151;
+      margin-bottom: 6px;
+    }
+    .whatif-slider-group label span {
+      font-weight: 600;
+      color: #111827;
+    }
+    .whatif-slider-group input[type=range] {
+      width: 100%;
+      accent-color: #3b82f6;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -540,6 +655,7 @@
   <nav class="bottom-nav">
     <button class="nav-btn active" data-tab="company" onclick="switchTab('company')">Company Scorecard</button>
     <button class="nav-btn" data-tab="department" onclick="switchTab('department')">Department Scorecard</button>
+    <button class="nav-btn" data-tab="ecom" onclick="switchTab('ecom')">Acquisition</button>
     <button class="nav-btn" data-tab="rocks" onclick="switchTab('rocks')">Rocks</button>
   </nav>
 
@@ -1247,6 +1363,14 @@ function getTargetStatusClass(actual, target, isLowerBetter) {
     const ratio = actual / target;
     if (ratio <= 1.0) return 'green';
     if (ratio <= 1.15) return 'yellow';
+    return 'red';
+  } else if (target < 0) {
+    // Negative target, higher is better (e.g. contribution margin, target = -22)
+    // Use target/actual so both-negative division gives correct direction
+    if (actual === 0) return 'red';
+    const pct = (target / actual) * 100;
+    if (pct >= 95) return 'green';
+    if (pct >= 85) return 'yellow';
     return 'red';
   } else {
     // Higher is better: ≥95% of target = green, ≥85% = yellow, else red
@@ -2080,6 +2204,585 @@ async function checkRocksPassword() {
   }
 }
 
+// --- eCom Scorecard ---
+const ECOM_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=941874293`;
+
+let ecomSections = [];
+let ecomWeekLabels = [];
+let ecomDateLabels = [];
+let ecomBarChart = null;
+let ecomLineChart = null;
+
+function normalisePva(vals) {
+  // If values look like decimals (all between -2 and 2) convert to percentages
+  const nonNull = vals.filter(v => v !== null && v !== 0);
+  if (nonNull.length > 0 && nonNull.every(v => Math.abs(v) <= 2)) {
+    return vals.map(v => v !== null ? Math.round(v * 100) : null);
+  }
+  return vals;
+}
+
+function fmtEcomVal(v, isCurrency) {
+  if (v === null || v === undefined) return '';
+  if (isCurrency) {
+    const abs = Math.abs(v);
+    const sign = v < 0 ? '-' : '';
+    if (abs >= 1000) return sign + '$' + (abs / 1000).toFixed(1) + 'K';
+    return sign + '$' + abs.toFixed(1).replace(/\.0$/, '');
+  }
+  if (Number.isInteger(v)) return v.toLocaleString();
+  return v % 1 === 0 ? v.toLocaleString() : v.toFixed(1);
+}
+
+function extractEcomData(rows) {
+  if (rows.length < 3) return;
+
+  const dateRow = rows[0];
+  const weekRow = rows[1];
+  ecomWeekLabels = [];
+  ecomDateLabels = [];
+  const dataCols = [];
+  for (let j = 2; j <= 15 && j < weekRow.length; j++) {
+    const val = (weekRow[j] || '').trim();
+    if (val.match(/^WK\s*\d+/i)) {
+      ecomWeekLabels.push(val);
+      ecomDateLabels.push((dateRow[j] || '').trim());
+      dataCols.push(j);
+    }
+  }
+
+  ecomSections = [];
+  let currentSection = { title: 'Acquisition Table', metrics: [] };
+  ecomSections.push(currentSection);
+
+  const dataRows = rows.slice(2);
+
+  for (let i = 0; i < dataRows.length; i++) {
+    const row = dataRows[i];
+    if (!row || row.length < 2) continue;
+
+    const col0 = (row[0] || '').trim();
+    const col1 = (row[1] || '').trim();
+
+    if (!col0 && !col1) continue;
+
+    // Detect triplet: current row is forecast, next is actuals, after is PvA
+    const nextRow = dataRows[i + 1];
+    const pvaRow = dataRows[i + 2];
+    const hasActuals = nextRow && (nextRow[1] || '').toLowerCase().includes('actual');
+    const hasPva = pvaRow && (pvaRow[1] || '').toLowerCase().includes('plan vs actual');
+
+    if (col1 && hasActuals && hasPva) {
+      const dept = col0 || (nextRow[0] || '').trim() || (pvaRow[0] || '').trim();
+      const forecastName = col1;
+      const actualName = (nextRow[1] || '').trim();
+      const pvaName = (pvaRow[1] || '').trim();
+      const weekly = dataCols.map(c => cleanNum(row[c]));
+      const actualWeekly = dataCols.map(c => cleanNum(nextRow[c]));
+      let pvaWeekly = dataCols.map(c => cleanNum(pvaRow[c]));
+      pvaWeekly = normalisePva(pvaWeekly);
+
+      let forecastTotal = null, actualTotal = null, pvaTotal = null;
+      for (let t = dataCols[dataCols.length - 1] + 1; t < row.length && t <= 17; t++) {
+        const v = cleanNum(row[t]); if (v !== null) { forecastTotal = v; break; }
+      }
+      for (let t = dataCols[dataCols.length - 1] + 1; t < nextRow.length && t <= 17; t++) {
+        const v = cleanNum(nextRow[t]); if (v !== null) { actualTotal = v; break; }
+      }
+      for (let t = dataCols[dataCols.length - 1] + 1; t < pvaRow.length && t <= 17; t++) {
+        const v = cleanNum(pvaRow[t]); if (v !== null) { pvaTotal = v; break; }
+      }
+      if (pvaTotal !== null && Math.abs(pvaTotal) <= 2) pvaTotal = Math.round(pvaTotal * 100);
+
+      const rawFirstVal = (row[dataCols[0]] || '').trim();
+      const isCurrency = rawFirstVal.startsWith('$') || rawFirstVal.startsWith('-$') || /usd|cad|\$/i.test(col1);
+      const isLowerBetter = /cac|cost/i.test(col1.toLowerCase());
+
+      currentSection.metrics.push({
+        type: 'triplet',
+        dept, forecastName, actualName, pvaName, isCurrency, isLowerBetter,
+        forecastWeekly: weekly, forecastTotal,
+        actualWeekly, actualTotal,
+        pvaWeekly, pvaTotal,
+      });
+
+      i += 2;
+      continue;
+    }
+
+    // Standalone metric row
+    if (col1) {
+      // Skip explanatory/annotation rows
+      if (col1.includes('=') || /^(lever |minus|ad cost|manufactu|shipping -|credit card|cm calculation|net sales)/i.test(col1)) continue;
+      const dept = col0;
+      const name = col1;
+      const weekly = dataCols.map(c => cleanNum(row[c]));
+
+      let total = null;
+      for (let t = dataCols[dataCols.length - 1] + 1; t < row.length && t <= 17; t++) {
+        const v = cleanNum(row[t]); if (v !== null) { total = v; break; }
+      }
+
+      const rawFirstVal = (row[dataCols[0]] || '').trim();
+      const isCurrency = rawFirstVal.startsWith('$') || rawFirstVal.startsWith('-$') || /usd|cad|\$/i.test(col1);
+      const { target: parsedTarget, isLowerBetter } = extractTarget(col1);
+
+      currentSection.metrics.push({
+        type: 'standalone',
+        dept, name, isCurrency, weekly, total,
+        parsedTarget, isLowerBetter,
+      });
+    }
+  }
+
+  ecomSections = ecomSections.filter(s => s.metrics.length > 0);
+}
+
+function renderEcom() {
+  const allEcomMetrics = ecomSections.flatMap(s => s.metrics);
+  if (allEcomMetrics.length === 0) {
+    document.getElementById('app').innerHTML = `
+      <div class="error-screen">
+        <h2>No eCom data found</h2>
+        <p>Could not parse data from the eCom sheet.</p>
+      </div>`;
+    return;
+  }
+
+  let html = '';
+
+  html += `<div class="legend">
+    <span class="legend-item"><span class="legend-dot" style="background:#059669"></span> ≥ 95%</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#d97706"></span> 85–94%</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#dc2626"></span> &lt; 85%</span>
+  </div>`;
+
+  // KPI Cards
+  const triplets = allEcomMetrics.filter(m => m.type === 'triplet');
+  const topBoxKeys = [
+    { key: '1st order cm', label: '1st Order CM / order', target: -22, diffMode: 'dollar', isCurrency: true, lowerBetter: false, neverGreen: true },
+    { key: '1st order count', label: '1st Order Count', companyStyle: true },
+    { key: 'aov', exclude: 'repeat', label: 'NC $ AOV Actuals', diffMode: 'dollar', isCurrency: true },
+    { key: 'cac', label: 'CAC Actuals', diffMode: 'dollar', isCurrency: true },
+  ];
+  const topBoxMetrics = topBoxKeys.map(({ key, exclude, label, target, diffMode, isCurrency, lowerBetter, companyStyle, neverGreen }) => {
+    const m = allEcomMetrics.find(m => {
+      const n = (m.forecastName || m.name || '').toLowerCase();
+      return n.includes(key) && (!exclude || !n.includes(exclude));
+    });
+    if (m) {
+      m._topLabel = label;
+      m._fixedTarget = target;
+      m._diffMode = diffMode;
+      m._cardCurrency = isCurrency;
+      m._companyStyle = companyStyle || false;
+      m._neverGreen = neverGreen || false;
+      if (lowerBetter !== undefined) m._forceLowerBetter = lowerBetter;
+    }
+    return m;
+  }).filter(Boolean);
+
+  if (topBoxMetrics.length > 0) {
+    html += '<div class="kpi-grid">';
+    topBoxMetrics.forEach(m => {
+      const isTriplet = m.type === 'triplet';
+      const cardLabel = m._topLabel || m.forecastName || m.name;
+
+      // QTD actual value
+      let qtdVal = null;
+      let targetVal = null;
+
+      if (isTriplet) {
+        qtdVal = m.actualTotal;
+        targetVal = m._fixedTarget !== undefined ? m._fixedTarget : m.forecastTotal;
+      } else {
+        qtdVal = m.total;
+        targetVal = m._fixedTarget !== undefined ? m._fixedTarget : m.parsedTarget;
+      }
+
+      const useCurrency = m._cardCurrency !== undefined ? m._cardCurrency : true;
+      const lowerBetter = m._forceLowerBetter !== undefined ? m._forceLowerBetter : m.isLowerBetter;
+
+      const fmtCardVal = (v) => {
+        if (v === null || v === undefined) return '—';
+        const abs = Math.abs(v);
+        const sign = v < 0 ? '-' : '';
+        if (!useCurrency) {
+          if (abs >= 1000) return sign + (abs / 1000).toFixed(1) + 'K';
+          return sign + Math.round(abs);
+        }
+        if (abs >= 1000) return sign + '$' + (abs / 1000).toFixed(1) + 'K';
+        return sign + '$' + Math.round(abs);
+      };
+
+      const qtdDisplay = fmtCardVal(qtdVal);
+
+      // Diff metric
+      let diffHtml = '';
+      if (qtdVal !== null && targetVal !== null) {
+        if (m._diffMode === 'pct') {
+          const pct = (qtdVal / targetVal) * 100;
+          const diff = pct - 100;
+          const diffStr = (diff >= 0 ? '+' : '') + diff.toFixed(1) + '% vs target';
+          const isGood = diff >= 0;
+          const cls = isGood ? '#059669' : '#dc2626';
+          diffHtml = `<div class="kpi-diff" style="color:${cls};">${diffStr}</div>`;
+        } else {
+          const diff = qtdVal - targetVal;
+          const absAmt = Math.abs(Math.round(diff));
+          const absStr = useCurrency ? '$' + absAmt : absAmt.toLocaleString();
+          const diffStr = (diff >= 0 ? '+' : '-') + absStr + ' vs target';
+          const isGood = lowerBetter ? diff <= 0 : diff >= 0;
+          const cls = (m._neverGreen && qtdVal < 0) ? (isGood ? '#d97706' : '#dc2626') : (isGood ? '#059669' : '#dc2626');
+          diffHtml = `<div class="kpi-diff" style="color:${cls};">${diffStr}</div>`;
+        }
+      }
+
+      const targetDisplay = targetVal !== null ? fmtCardVal(targetVal) : null;
+
+      if (m._companyStyle) {
+        const fmtCount = (v) => v !== null ? Math.round(v).toLocaleString() : '—';
+        let actual, forecast;
+        if (isTriplet) {
+          actual = m.actualTotal;
+          forecast = m.forecastTotal;
+        } else {
+          // For standalone: total col = QTD plan; weekly values are additive actuals
+          forecast = m.total;
+          const weeklySum = m.weekly.reduce((s, v) => v !== null ? s + v : s, 0);
+          actual = weeklySum > 0 ? weeklySum : null;
+        }
+        const pva = (actual !== null && forecast) ? (actual / forecast) * 100 : null;
+        const status = getStatusClass(pva, false);
+        html += `
+        <div class="kpi-card">
+          <div class="kpi-label">${cardLabel}</div>
+          <div class="kpi-qtd-label">QTD</div>
+          <div class="kpi-value">${fmtCount(actual)}</div>
+          <div class="kpi-forecast">of ${fmtCount(forecast)} forecast</div>
+          <span class="kpi-badge status-${status}">
+            <span class="kpi-dot"></span>
+            ${fmtPct(pva)} of plan
+          </span>
+        </div>`;
+      } else {
+      html += `
+        <div class="kpi-card">
+          <div class="kpi-label">${cardLabel}</div>
+          <div class="kpi-qtd-label">QTD</div>
+          <div class="kpi-value">${qtdDisplay}</div>
+          ${targetDisplay ? `<div class="kpi-forecast">target ${targetDisplay}</div>` : ''}
+          ${diffHtml}
+        </div>`;
+      }
+    });
+    html += '</div>';
+  }
+
+  // AOV / CAC What-If Card
+  // Variable costs fixed at 47.5% of AOV
+  const wiAovMetric = topBoxMetrics.find(m => { const n = (m.forecastName || m.name || '').toLowerCase(); return n.includes('aov') && !n.includes('repeat'); });
+  const wiCacMetric = topBoxMetrics.find(m => (m.forecastName || m.name || '').toLowerCase().includes('cac'));
+  const wiActualAov = wiAovMetric ? (wiAovMetric.actualTotal ?? wiAovMetric.total ?? 58) : 58;
+  const wiActualCac = wiCacMetric ? (wiCacMetric.actualTotal ?? wiCacMetric.total ?? 120) : 120;
+
+  const wiAovInit = Math.round(wiActualAov);
+  const wiCacInit = Math.round(wiActualCac);
+
+  html += `
+  <div style="padding:16px 0 8px; display:flex; align-items:flex-start; gap:20px; flex-wrap:wrap;">
+    <div class="whatif-card">
+      <h3>1st Order CM — What-If</h3>
+      <div class="whatif-cm positive" id="whatif-cm-value">—</div>
+      <div class="whatif-breakdown" id="whatif-breakdown"></div>
+      <div class="whatif-breakeven" id="whatif-breakeven"></div>
+      <div class="whatif-sliders">
+        <div class="whatif-slider-group">
+          <label>NC AOV <span id="whatif-aov-label">$${wiAovInit}</span></label>
+          <input type="range" id="whatif-aov" min="20" max="200" step="1" value="${wiAovInit}">
+        </div>
+        <div class="whatif-slider-group">
+          <label>CAC <span id="whatif-cac-label">$${wiCacInit}</span></label>
+          <input type="range" id="whatif-cac" min="0" max="250" step="1" value="${wiCacInit}">
+        </div>
+        <div class="whatif-slider-group">
+          <label>Variable Cost %</label>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:2px">
+            <input type="number" id="whatif-vc" min="0" max="100" step="0.1" value="47.5"
+              style="width:72px;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;font-weight:600;color:#111827;text-align:right">
+            <span style="font-size:13px;color:#6b7280">% of AOV</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="cm-info-box" style="flex:1; min-width:220px; max-width:340px; margin-bottom:0;">
+      <strong>How to Use This</strong>
+      This shows how much in the hole you are for each customer.<br><br>
+      Move AOV and CAC.<br>
+      If it's green (≥ −$22), you can scale.<br><br>
+      Target Variable Cost with generic cortisol | Conservatively 25%
+    </div>
+  </div>`;
+
+  // Charts
+  const cacMetric = triplets.find(m => (m.forecastName || m.name || '').toLowerCase().includes('cac')) || triplets[0];
+  if (triplets.length > 0) {
+    html += `<div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-title">CAC — Plan vs Actual</div>
+        <div class="chart-container"><canvas id="ecomBarChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Weekly Performance (95% Target)</div>
+        <div class="chart-container"><canvas id="ecomLineChart"></canvas></div>
+      </div>
+    </div>`;
+  }
+
+
+  // Sections as tables
+  ecomSections.forEach(section => {
+    html += `<div class="table-card section-performance">
+      <div class="table-header">${section.title}</div>
+      <div class="table-wrapper"><table>
+        <thead>
+          <tr>
+            <th rowspan="2" style="min-width:36px">A</th>
+            <th rowspan="2" style="min-width:220px">Metric</th>`;
+    ecomDateLabels.forEach(d => { html += `<th style="font-weight:400;color:#6b7280;font-size:11px">${d}</th>`; });
+    html += `<th rowspan="2">PvA Total</th></tr><tr>`;
+    ecomWeekLabels.forEach(w => { html += `<th>${w}</th>`; });
+    html += `</tr></thead><tbody>`;
+
+    section.metrics.forEach(m => {
+      if (m.type === 'triplet') {
+        // Forecast row
+        html += `<tr class="row-forecast">
+          <td class="metric-group-label" rowspan="3">${m.dept}</td>
+          <td>${m.forecastName}</td>`;
+        m.forecastWeekly.forEach(v => { html += `<td>${fmtEcomVal(v, m.isCurrency)}</td>`; });
+        html += `<td><strong>${fmtEcomVal(m.forecastTotal, m.isCurrency)}</strong></td></tr>`;
+
+        // Actuals row
+        html += `<tr class="row-actual"><td>${m.actualName}</td>`;
+        m.actualWeekly.forEach(v => {
+          const cls = (v !== null && m._fixedTarget !== undefined)
+            ? 'cell-' + getTargetStatusClass(v, m._fixedTarget, false)
+            : '';
+          html += `<td class="${cls}">${fmtEcomVal(v, m.isCurrency)}</td>`;
+        });
+        const actTotalCls = (m.actualTotal !== null && m._fixedTarget !== undefined)
+          ? 'cell-' + getTargetStatusClass(m.actualTotal, m._fixedTarget, false)
+          : '';
+        html += `<td class="${actTotalCls}"><strong>${fmtEcomVal(m.actualTotal, m.isCurrency)}</strong></td></tr>`;
+
+        // PvA row
+        html += `<tr class="row-pva"><td>${m.pvaName}</td>`;
+        m.pvaWeekly.forEach(v => {
+          const cls = v !== null && v !== 0 ? 'cell-' + getStatusClass(v, m.isLowerBetter) : '';
+          html += `<td class="${cls}">${v !== null && v !== 0 ? fmtPct(v) : ''}</td>`;
+        });
+        const totalCls = m.pvaTotal !== null && m.pvaTotal !== 0 ? 'cell-' + getStatusClass(m.pvaTotal, m.isLowerBetter) : '';
+        html += `<td class="${totalCls}"><strong>${m.pvaTotal !== null && m.pvaTotal !== 0 ? fmtPct(m.pvaTotal) : ''}</strong></td></tr>`;
+      } else {
+        html += `<tr class="row-standalone">
+          <td class="metric-group-label">${m.dept}</td>
+          <td>${m.name}</td>`;
+        const saTarget = m._fixedTarget !== undefined ? m._fixedTarget : m.parsedTarget;
+        const saLowerBetter = m._fixedTarget !== undefined ? false : m.isLowerBetter;
+        m.weekly.forEach(v => {
+          const cls = (v !== null && saTarget !== null)
+            ? 'cell-' + getTargetStatusClass(v, saTarget, saLowerBetter)
+            : '';
+          html += `<td class="${cls}">${fmtEcomVal(v, m.isCurrency)}</td>`;
+        });
+        const totalCls = (m.total !== null && saTarget !== null)
+          ? 'cell-' + getTargetStatusClass(m.total, saTarget, saLowerBetter)
+          : '';
+        html += `<td class="${totalCls}"><strong>${fmtEcomVal(m.total, m.isCurrency)}</strong></td></tr>`;
+      }
+    });
+
+    html += '</tbody></table></div></div>';
+  });
+
+  document.getElementById('app').innerHTML = html;
+
+  if (triplets.length > 0) {
+    drawEcomBarChart(cacMetric);
+    drawEcomLineChart(triplets);
+  }
+
+  initAovCacWhatIf();
+}
+
+function initAovCacWhatIf() {
+  const aovInput = document.getElementById('whatif-aov');
+  const cacInput = document.getElementById('whatif-cac');
+  const vcInput  = document.getElementById('whatif-vc');
+  if (!aovInput || !cacInput || !vcInput) return;
+
+  function fmt(n) {
+    const abs = Math.abs(Math.round(n));
+    return (n < 0 ? '-$' : '$') + abs.toLocaleString();
+  }
+
+  function update() {
+    const aov    = parseFloat(aovInput.value);
+    const cac    = parseFloat(cacInput.value);
+    const vcPct  = Math.min(100, Math.max(0, parseFloat(vcInput.value) || 0));
+    const vc     = aov * (vcPct / 100);
+    const cm     = aov - vc - cac;
+
+    document.getElementById('whatif-aov-label').textContent = '$' + Math.round(aov);
+    document.getElementById('whatif-cac-label').textContent = '$' + Math.round(cac);
+
+    const cmEl = document.getElementById('whatif-cm-value');
+    cmEl.textContent = fmt(cm);
+    cmEl.className = 'whatif-cm ' + (cm >= -22 ? 'positive' : 'negative');
+
+    document.getElementById('whatif-breakdown').innerHTML =
+      `<span>AOV &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; $${Math.round(aov)}</span>` +
+      `<span>− Variable Costs &nbsp; $${Math.round(vc)} (${vcPct}%)</span>` +
+      `<span>− CAC &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; $${Math.round(cac)}</span>` +
+      `<span style="border-top:1px solid #e5e7eb;padding-top:4px;margin-top:2px">= 1st Order CM &nbsp;&nbsp; ${fmt(cm)}</span>`;
+
+    document.getElementById('whatif-breakeven').textContent =
+      `Break-even CAC = $${Math.round(aov - vc)} (AOV − variable costs)`;
+  }
+
+  aovInput.addEventListener('input', update);
+  cacInput.addEventListener('input', update);
+  vcInput.addEventListener('input', update);
+  update();
+}
+
+function drawEcomBarChart(metric) {
+  if (!metric) return;
+  const ctx = document.getElementById('ecomBarChart');
+  if (!ctx) return;
+  if (ecomBarChart) ecomBarChart.destroy();
+
+  ecomBarChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ecomWeekLabels.slice(0, metric.forecastWeekly.length),
+      datasets: [
+        {
+          label: 'Plan',
+          data: metric.forecastWeekly.map(v => v !== null ? Math.abs(v) : null),
+          backgroundColor: '#94a3b8',
+          borderRadius: 4,
+          barPercentage: 0.8,
+          categoryPercentage: 0.7,
+        },
+        {
+          label: 'Actual',
+          data: metric.actualWeekly.map(v => v !== null ? Math.abs(v) : null),
+          backgroundColor: '#3b82f6',
+          borderRadius: 4,
+          barPercentage: 0.8,
+          categoryPercentage: 0.7,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { usePointStyle: true, padding: 16, font: { size: 12 } } },
+      },
+      scales: {
+        y: { beginAtZero: true, grid: { color: '#f3f4f6' }, ticks: { font: { size: 11 } } },
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+function drawEcomLineChart(metrics) {
+  const ctx = document.getElementById('ecomLineChart');
+  if (!ctx) return;
+  if (ecomLineChart) ecomLineChart.destroy();
+
+  const datasets = metrics.filter(m => m.pvaWeekly.some(v => v !== null && v !== 0)).map((m, i) => ({
+    label: m.forecastName || m.name || '',
+    data: m.pvaWeekly.map(v => (v !== null && v !== 0) ? v : null),
+    borderColor: METRIC_COLORS[i % METRIC_COLORS.length],
+    backgroundColor: 'transparent',
+    borderWidth: 2.5,
+    pointRadius: 3,
+    pointHoverRadius: 5,
+    tension: 0.3,
+    spanGaps: false,
+  }));
+
+  datasets.push({
+    label: '95% Target',
+    data: ecomWeekLabels.map(() => 95),
+    borderColor: '#dc2626',
+    borderDash: [6, 4],
+    borderWidth: 1.5,
+    pointRadius: 0,
+    pointHoverRadius: 0,
+  });
+
+  ecomLineChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: ecomWeekLabels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { usePointStyle: true, padding: 12, font: { size: 11 } } },
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y !== null ? ctx.parsed.y + '%' : '—') } }
+      },
+      scales: {
+        y: { min: 0, max: 200, grid: { color: '#f3f4f6' }, ticks: { font: { size: 11 }, callback: v => v + '%' } },
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+async function loadEcomData() {
+  const btn = document.querySelector('.refresh-btn');
+  if (btn) btn.classList.add('loading');
+
+  try {
+    const res = await fetch(ECOM_CSV_URL);
+    if (!res.ok) throw new Error('Failed to fetch eCom sheet');
+    const text = await res.text();
+    const rows = parseCSV(text);
+    extractEcomData(rows);
+
+    const allEcomMetrics = ecomSections.flatMap(s => s.metrics);
+    if (allEcomMetrics.length === 0) {
+      document.getElementById('app').innerHTML = `
+        <div class="error-screen">
+          <h2>No eCom metrics found</h2>
+          <p>Could not parse data from the eCom sheet.</p>
+        </div>`;
+      return;
+    }
+
+    renderEcom();
+
+    const now = new Date();
+    document.getElementById('lastUpdated').textContent =
+      'Updated ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch (err) {
+    document.getElementById('app').innerHTML = `
+      <div class="error-screen">
+        <h2>Couldn't load eCom data</h2>
+        <p>Make sure the Google Sheet is shared as "Anyone with the link."</p>
+        <p style="margin-top:8px;font-size:12px;color:#6b7280;">${err.message}</p>
+      </div>`;
+  } finally {
+    if (btn) btn.classList.remove('loading');
+  }
+}
+
 // --- Tab switching ---
 function switchTab(tab) {
   // Password gate for Rocks tab
@@ -2098,13 +2801,14 @@ function switchTab(tab) {
   const titles = {
     company: 'Q1 2026 Company Scorecard',
     department: 'Q1 2026 Department Scorecard',
+    ecom: 'Q1 2026 Acquisition',
     rocks: 'Q1 2026 Rocks',
   };
   document.querySelector('.header h1').textContent = titles[tab] || titles.company;
 
-  // Show/hide market toggle (department and rocks views are global)
+  // Show/hide market toggle (department, ecom and rocks views are global)
   const toggle = document.querySelector('.toggle-group');
-  if (tab === 'department' || tab === 'rocks') {
+  if (tab === 'department' || tab === 'rocks' || tab === 'ecom') {
     toggle.style.display = 'none';
   } else {
     toggle.style.display = 'flex';
@@ -2120,6 +2824,8 @@ function switchTab(tab) {
     loadData();
   } else if (tab === 'department') {
     loadDeptData();
+  } else if (tab === 'ecom') {
+    loadEcomData();
   } else if (tab === 'rocks') {
     loadRocksData();
   }
@@ -2129,6 +2835,7 @@ loadData();
 setInterval(() => {
   if (currentTab === 'company') loadData();
   else if (currentTab === 'department') loadDeptData();
+  else if (currentTab === 'ecom') loadEcomData();
   else if (currentTab === 'rocks') loadRocksData();
 }, 5 * 60 * 1000);
 </script>
